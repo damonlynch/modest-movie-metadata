@@ -3,7 +3,7 @@
 
 
 from qtpy.QtCore import Slot, QObject, QThreadPool, QTimer, QSize
-from qtpy.QtGui import QGuiApplication, QIcon, QPixmap, QPalette
+from qtpy.QtGui import QGuiApplication, QIcon, QPixmap
 
 from qtpy.QtWidgets import (
     QMainWindow,
@@ -20,11 +20,11 @@ from qtpy.QtWidgets import (
 from .appthreading import Worker
 from .selectrecord import SelectRecord
 from .fancylineedit import FancyLineEdit
+from .narrowspinbox import NarrowSpinbox
 from ..config import application_name
 from ..tools.audiotools import play_sound
 from ..tools.logtools import get_logger
 from ..tools.movieinfo import fetch_movie_info, MovieInfo, sanitise_title, get_imdb
-from ..tools.narrowspinbox import NarrowSpinbox
 from ..tools.utilities import program_icon_path, video_folder_path
 from ..tools.viewutils import boxBorderColor
 
