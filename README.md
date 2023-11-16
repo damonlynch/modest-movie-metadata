@@ -7,8 +7,6 @@ names using data from IMDb. By way of example, for the television show
 [Blackadder](https://www.imdb.com/title/tt0084988/), this tool will
 generate:
 
->Blackadder (1982) [imdbid-tt0084988]. 
-
 ![Program screenshot](.github/modest-movie-metadata.png)
 
 Designed to be as efficient as possible, it can be used hands-free:
