@@ -3,15 +3,14 @@
 
 
 from qtpy.QtCore import Slot, QObject, QThreadPool, QTimer, QSize
-from qtpy.QtGui import QGuiApplication, QIcon, QPixmap
+from qtpy.QtGui import QGuiApplication, QIcon, QPixmap, QFont
 
 from qtpy.QtWidgets import (
     QMainWindow,
     QVBoxLayout,
-    QFormLayout,
     QHBoxLayout,
+    QGridLayout,
     QWidget,
-    QSpinBox,
     QDialogButtonBox,
     QPushButton,
     QProgressBar,
@@ -58,12 +57,27 @@ class MainWindow(QMainWindow):
         self.folderLabel.setWordWrap(True)
 
         self.titleEdit = FancyLineEdit()
+        self.titleLabel = QLabel("&Title")
+        self.titleLabel.setBuddy(self.titleEdit)
 
         self.yearSpinbox = NarrowSpinbox()
         self.yearSpinbox.setRange(1894, 2080)
         self.yearSpinbox.clear()
+        self.yearLabel = QLabel("&Year")
+        self.yearLabel.setBuddy(self.yearSpinbox)
 
         self.imdbEdit = FancyLineEdit()
+        self.imdbLabel = QLabel("&IMDb")
+        self.imdbLabel.setBuddy(self.imdbEdit)
+
+        for label in (self.titleLabel, self.yearLabel, self.imdbLabel):
+            label.setStyleSheet(
+                f"""
+                font-weight: bold;
+                font-size: {self.font().pointSize() - 1}pt;
+                margin-top: 10px;
+                """
+            )
 
         self.titleEdit.textEdited.connect(self.titleEditTextEdited)
         self.titleEdit.pasted.connect(self.titleEditPasted)
@@ -88,16 +102,19 @@ class MainWindow(QMainWindow):
             """
         )
 
-        formLayout = QFormLayout()
-        formLayout.addRow("&Title:", self.titleEdit)
-        formLayout.addRow("&Year:", self.yearSpinbox)
-        formLayout.addRow("&IMDb:", self.imdbEdit)
-        formLayout.setSpacing(6)
+        gridLayout = QGridLayout()
+        gridLayout.addWidget(self.titleLabel, 0, 0)
+        gridLayout.addWidget(self.yearLabel, 0, 1)
+        gridLayout.addWidget(self.titleEdit, 1, 0)
+        gridLayout.addWidget(self.yearSpinbox, 1, 1)
+        gridLayout.addWidget(self.imdbLabel, 2, 0)
+        gridLayout.addWidget(self.imdbEdit, 3, 0, 1, 2)
+        gridLayout.setSpacing(6)
 
         layout = QVBoxLayout()
-        layout.setSpacing(30)
+        layout.setSpacing(18)
         layout.addWidget(folderWidget, stretch=100)
-        layout.addLayout(formLayout)
+        layout.addLayout(gridLayout)
         layout.addWidget(self.buttonBox)
 
         mainWidget = QWidget()
