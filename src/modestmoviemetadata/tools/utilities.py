@@ -21,5 +21,11 @@ def program_icon_path() -> str:
     return str(files(data).joinpath("letter-m.png"))
 
 
+def video_folder_path() -> str:
+    # Icon created by Smashicons - Flaticon
+    # https://www.flaticon.com/free-icon/video_6302563
+    return str(files(data).joinpath("video.png"))
+
+
 def data_file_path(data_file: str) -> Path:
     return files(data).joinpath(data_file)

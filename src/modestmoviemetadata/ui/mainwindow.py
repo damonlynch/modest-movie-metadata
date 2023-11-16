@@ -2,27 +2,20 @@
 # SPDX - License - Identifier: GPL-3.0-or-later
 
 
-from qtpy.QtCore import (
-    Slot,
-    QObject,
-    QThreadPool,
-    QTimer,
-)
-from qtpy.QtGui import (
-    QGuiApplication,
-    QIcon,
-)
+from qtpy.QtCore import Slot, QObject, QThreadPool, QTimer, QSize
+from qtpy.QtGui import QGuiApplication, QIcon, QPixmap
 
 from qtpy.QtWidgets import (
     QMainWindow,
     QVBoxLayout,
     QFormLayout,
+    QHBoxLayout,
     QWidget,
-    QLineEdit,
     QSpinBox,
     QDialogButtonBox,
     QPushButton,
     QProgressBar,
+    QLabel,
 )
 
 from .appthreading import Worker
@@ -32,7 +25,7 @@ from ..config import application_name
 from ..tools.audiotools import play_sound
 from ..tools.logtools import get_logger
 from ..tools.movieinfo import fetch_movie_info, MovieInfo, sanitise_title, get_imdb
-from ..tools.utilities import program_icon_path
+from ..tools.utilities import program_icon_path, video_folder_path
 
 logger = get_logger()
 
@@ -54,6 +47,15 @@ class MainWindow(QMainWindow):
         self.clipboard = QGuiApplication.clipboard()
         self.clipboard.changed.connect(self.clipboardDataChanged)
 
+        self.folderIconLabel = QLabel()
+
+        pixmap = QPixmap(video_folder_path())
+        self.folderIconLabel.setPixmap(pixmap)
+        self.folderIconLabel.setScaledContents(True)
+        self.folderIconLabel.setFixedSize(pixmap.size())
+        self.folderLabel = QLabel()
+        self.folderLabel.setWordWrap(True)
+
         self.titleEdit = FancyLineEdit()
 
         self.yearSpinbox = QSpinBox()
@@ -61,9 +63,6 @@ class MainWindow(QMainWindow):
         self.yearSpinbox.clear()
 
         self.imdbEdit = FancyLineEdit()
-
-        self.outputEdit = QLineEdit()
-        self.outputEdit.setReadOnly(True)
 
         self.titleEdit.textEdited.connect(self.titleEditTextEdited)
         self.titleEdit.pasted.connect(self.titleEditPasted)
@@ -77,15 +76,26 @@ class MainWindow(QMainWindow):
         self.progressBar.setTextVisible(False)
         self.progressBar.setMaximumWidth(100)
 
+        folderLayout = QHBoxLayout()
+        folderLayout.addWidget(self.folderIconLabel)
+        folderLayout.addWidget(self.folderLabel)
+        folderWidget = QWidget()
+        folderWidget.setLayout(folderLayout)
+        folderWidget.setStyleSheet(
+            """
+            background-color: palette(base);
+            """
+        )
+
         formLayout = QFormLayout()
         formLayout.addRow("&Title:", self.titleEdit)
         formLayout.addRow("&Year:", self.yearSpinbox)
         formLayout.addRow("&IMDb:", self.imdbEdit)
-        formLayout.addRow("Folder:", self.outputEdit)
         formLayout.setSpacing(6)
 
         layout = QVBoxLayout()
-        layout.setSpacing(18)
+        layout.setSpacing(30)
+        layout.addWidget(folderWidget, stretch=100)
         layout.addLayout(formLayout)
         layout.addWidget(self.buttonBox)
 
@@ -93,12 +103,12 @@ class MainWindow(QMainWindow):
         mainWidget.setLayout(layout)
 
         self.setCentralWidget(mainWidget)
-        self.setMinimumWidth(600)
 
         # Activate the status bar
         self.statusBar()
         self.statusBar().addPermanentWidget(self.progressBar)
 
+        self.resize(QSize(600, 10))
         self.show()
 
     def setupButtonBox(self) -> None:
@@ -169,17 +179,17 @@ class MainWindow(QMainWindow):
         title = self.titleEdit.text()
         year = self.yearSpinbox.text()
         if not (title and year):
-            self.outputEdit.clear()
+            self.folderLabel.clear()
             return
 
         text = f"{sanitise_title(title)} ({year})"
         if self.imdbEdit.text():
             text = f"{text} [imdbid-{self.imdbEdit.text()}]"
-        self.outputEdit.setText(text)
+        self.folderLabel.setText(text)
 
     @Slot(bool)
     def copyButtonClicked(self, checked: bool) -> None:
-        text = self.outputEdit.text()
+        text = self.folderLabel.text()
         if text:
             self.clipboard.setText(text)
 
@@ -189,7 +199,7 @@ class MainWindow(QMainWindow):
         self.yearSpinbox.setValue(0)
         self.yearSpinbox.clear()
         self.imdbEdit.clear()
-        self.outputEdit.clear()
+        self.folderLabel.clear()
 
     @Slot(bool)
     def getButtonClicked(self, checked: bool) -> None:
