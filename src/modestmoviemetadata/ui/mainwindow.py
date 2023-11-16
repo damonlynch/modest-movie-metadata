@@ -3,7 +3,7 @@
 
 
 from qtpy.QtCore import Slot, QObject, QThreadPool, QTimer, QSize
-from qtpy.QtGui import QGuiApplication, QIcon, QPixmap, QFont
+from qtpy.QtGui import QGuiApplication, QIcon, QPixmap
 
 from qtpy.QtWidgets import (
     QMainWindow,
