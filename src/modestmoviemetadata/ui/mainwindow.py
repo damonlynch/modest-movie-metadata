@@ -3,7 +3,7 @@
 
 
 from qtpy.QtCore import Slot, QObject, QThreadPool, QTimer, QSize
-from qtpy.QtGui import QGuiApplication, QIcon, QPixmap
+from qtpy.QtGui import QGuiApplication, QIcon, QPixmap, QPalette
 
 from qtpy.QtWidgets import (
     QMainWindow,
@@ -24,8 +24,9 @@ from ..config import application_name
 from ..tools.audiotools import play_sound
 from ..tools.logtools import get_logger
 from ..tools.movieinfo import fetch_movie_info, MovieInfo, sanitise_title, get_imdb
-from ..tools.utilities import program_icon_path, video_folder_path
 from ..tools.narrowspinbox import NarrowSpinbox
+from ..tools.utilities import program_icon_path, video_folder_path
+from ..tools.viewutils import boxBorderColor
 
 logger = get_logger()
 
@@ -96,9 +97,17 @@ class MainWindow(QMainWindow):
         folderLayout.addWidget(self.folderLabel)
         folderWidget = QWidget()
         folderWidget.setLayout(folderLayout)
+
+        folderWidget.setObjectName("folderWidget")
+        borderColor = boxBorderColor(self.imdbEdit)
+
         folderWidget.setStyleSheet(
-            """
-            background-color: palette(base);
+            f"""
+            #folderWidget 
+            {{
+                background-color: palette(base);
+                border: 1px solid {borderColor.name()};
+            }}
             """
         )
 
