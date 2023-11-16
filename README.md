@@ -2,7 +2,7 @@
 
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 
-A very simple tool to generate Jellyfin folder names using data from IMDb. 
+A very simple tool to generate [Jellyfin](https://jellyfin.org/) folder names using data from IMDb. 
 
 Designed for almost hands-free use:
 
@@ -10,6 +10,8 @@ Designed for almost hands-free use:
 2. Automatically writes generated folder names to the clipboard.
 
 Developed with Python 3.12 and PySide 6.6. Tested under Windows 10 and 11.
+
+This project is not affiliated with Jellyfin or IMDb.
 
 ## Licence
 GPL 3.0 or later.
@@ -21,7 +23,6 @@ GPL 3.0 or later.
 
 ## Credits
 
-Program icon created by [Smashicons - Flaticon](https://www.flaticon.com/free-icon/letter-m_6431117).
-Video folder icon created by [Smashicons - Flaticon](https://www.flaticon.com/free-icon/video_6302563)
-
-Sound effects from [Pixabay](https://pixabay.com/sound-effects/game-ui-sounds-14857/). 
+- Program icon created by [Smashicons - Flaticon](https://www.flaticon.com/free-icon/letter-m_6431117).
+- Video folder icon created by [Smashicons - Flaticon](https://www.flaticon.com/free-icon/video_6302563)
+- Sound effects from [Pixabay](https://pixabay.com/sound-effects/game-ui-sounds-14857/). 

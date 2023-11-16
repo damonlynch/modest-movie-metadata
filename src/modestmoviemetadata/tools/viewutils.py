@@ -1,3 +1,7 @@
+# Copyright (c) 2023 Damon Lynch
+# SPDX - License - Identifier: GPL-3.0-or-later
+
+
 from qtpy.QtCore import (
     Qt,
 )
