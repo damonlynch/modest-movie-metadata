@@ -9,6 +9,8 @@ generate:
 
 >Blackadder (1982) [imdbid-tt0084988]. 
 
+![Program screenshot](.github/mainwindow.png)
+
 Designed to be as efficient as possible, it can be used hands-free:
 
 1. Monitors the clipboard for IMDb IDs, e.g. within a URL. 
