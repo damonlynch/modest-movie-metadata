@@ -9,7 +9,7 @@ generate:
 
 >Blackadder (1982) [imdbid-tt0084988]. 
 
-![Program screenshot](.github/mainwindow.png)
+![Program screenshot](.github/modest-movie-metadata.png)
 
 Designed to be as efficient as possible, it can be used hands-free:
 
