@@ -26,6 +26,7 @@ from ..tools.audiotools import play_sound
 from ..tools.logtools import get_logger
 from ..tools.movieinfo import fetch_movie_info, MovieInfo, sanitise_title, get_imdb
 from ..tools.utilities import program_icon_path, video_folder_path
+from ..tools.narrowspinbox import NarrowSpinbox
 
 logger = get_logger()
 
@@ -58,7 +59,7 @@ class MainWindow(QMainWindow):
 
         self.titleEdit = FancyLineEdit()
 
-        self.yearSpinbox = QSpinBox()
+        self.yearSpinbox = NarrowSpinbox()
         self.yearSpinbox.setRange(1894, 2080)
         self.yearSpinbox.clear()
 
