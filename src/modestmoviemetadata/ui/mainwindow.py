@@ -17,6 +17,7 @@ from qtpy.QtWidgets import (
     QLabel,
 )
 
+from .aboutdialog import AboutDialog
 from .appthreading import Worker
 from .selectrecord import SelectRecord
 from .fancylineedit import FancyLineEdit
@@ -143,7 +144,14 @@ class MainWindow(QMainWindow):
             QDialogButtonBox.StandardButtons.Apply
             | QDialogButtonBox.StandardButtons.Open
             | QDialogButtonBox.StandardButtons.Reset
+            | QDialogButtonBox.StandardButtons.Help
         )
+
+        self.aboutButton = self.buttonBox.button(
+            QDialogButtonBox.StandardButton.Help
+        )  # type: QPushButton
+        self.aboutButton.clicked.connect(self.aboutButtonClicked)
+        self.aboutButton.setText("About")
 
         self.resetButton = self.buttonBox.button(
             QDialogButtonBox.StandardButton.Reset
@@ -213,6 +221,11 @@ class MainWindow(QMainWindow):
         if self.imdbEdit.text():
             text = f"{text} [imdbid-{self.imdbEdit.text()}]"
         self.folderLabel.setText(text)
+
+    @Slot()
+    def aboutButtonClicked(self, checked: bool) -> None:
+        about = AboutDialog(parent=self)
+        about.exec()
 
     @Slot(bool)
     def copyButtonClicked(self, checked: bool) -> None:

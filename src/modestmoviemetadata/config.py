@@ -9,7 +9,7 @@ application_identifier = "modest-movie-metadata"
 application_summary = "Create Jellyfin compatible folder and file names"
 logfile_name = "modest-movie-metadata.log"
 
-copyright_message = "Copyright &copy; 2022&ndash;2023 Damon Lynch."
+copyright_message = "Copyright &copy; 2023 Damon Lynch."
 
 try:
     version = importlib.metadata.version("modestmoviemetadata")
