@@ -9,7 +9,7 @@ generate the folder name `Blackadder (1982) [imdbid-tt0084988]`:
 
 ![Program screenshot](.github/modest-movie-metadata.png)
 
-Designed to be as efficient as possible, it can be used hands-free:
+Designed to be as efficient as possible, you use it hands-free:
 
 1. Monitors the clipboard for IMDb IDs, e.g. within a URL. 
 2. Automatically writes generated folder names to the clipboard.
@@ -19,9 +19,11 @@ up the IMDB ID using this tool. However, in practice, it is typically easier to
 search for the content on the IMDb website using a web browser, and then simply 
 copy the URL to the clipboard.
 
-The program does not create or monitor folders on the file system. 
+The program does not create or monitor folders on the file system.
 
-Developed with Python 3.12 and PySide 6.6. Tested under Windows 10 and 11.
+Developed with Python 3.12, PySide 6.6, and 
+[Cinemagoer](https://github.com/cinemagoer/cinemagoer).
+Tested under Windows 10 and 11.
 
 This project is not affiliated with Jellyfin or IMDb.
 
