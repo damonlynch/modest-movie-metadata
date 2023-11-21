@@ -5,7 +5,7 @@
 A very simple tool to generate [Jellyfin](https://jellyfin.org/) folder 
 names using data from IMDb. By way of example, for the television show 
 [Blackadder](https://www.imdb.com/title/tt0084988/), this tool will
-generate:
+generate the folder name `Blackadder (1982) [imdbid-tt0084988]`:
 
 ![Program screenshot](.github/modest-movie-metadata.png)
 
@@ -18,6 +18,8 @@ If you prefer, you can enter only the title and year, and attempt to look
 up the IMDB ID using this tool. However, in practice, it is typically easier to 
 search for the content on the IMDb website using a web browser, and then simply 
 copy the URL to the clipboard.
+
+The program does not create or monitor folders on the file system. 
 
 Developed with Python 3.12 and PySide 6.6. Tested under Windows 10 and 11.
 
