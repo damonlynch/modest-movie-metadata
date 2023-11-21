@@ -1,4 +1,3 @@
-import ctypes
 import logging
 from pathlib import Path
 import sys
@@ -9,6 +8,13 @@ from .tools.filetools import program_appdata_directory, windows_user_profile_dir
 from .tools.logtools import setup_main_process_logging
 from .ui.mainwindow import MainWindow
 
+try:
+    # Ensure the program's icon is displayed in the Windows taskbar
+    from ctypes import windll
+    myappid = "damonlynch.modest.movie.metadata.1"
+    windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
+except ImportError:
+    myappid=None
 
 def main():
     logging_level = logging.DEBUG
@@ -18,10 +24,6 @@ def main():
         logging_level=logging_level,
     )
     logger.debug("%s is starting", application_name)
-
-    # Ensure the program's icon is displayed in the taskbar
-    myappid = "damonlynch.modest.movie.metadata.1"  # arbitrary string
-    ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
 
     global app
     app = QtSingleApplication(app_guid, sys.argv)
