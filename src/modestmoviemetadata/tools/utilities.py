@@ -18,7 +18,7 @@ def pyqt_api() -> bool:
 def program_icon_path() -> str:
     # Icon created by Smashicons - Flaticon
     # https://www.flaticon.com/free-icon/letter-m_6431117
-    return str(files(data).joinpath("letter-m.png"))
+    return str(files(data).joinpath("logo.png"))
 
 
 def video_folder_path() -> str:

@@ -110,7 +110,6 @@ class AboutDialog(QDialog):
         # Credits view
 
         photolink = f"""<a href="https://www.flickr.com/photos/damonlynch/53347185963/" {link_style}>High-altitude power poles in Tajikistan</a>"""
-        program_icon = f'<a href="https://www.flaticon.com/free-icon/letter-m_6431117" {link_style}>Smashicons - Flaticon</a>'
         video_folder = f'<a href="https://www.flaticon.com/free-icon/video_6302563" {link_style}>Freepik - Flaticon</a>'
         sound_pixabay = f"""<a href="https://pixabay.com/sound-effects/game-ui-sounds-14857/" {link_style}>Pixabay</a>"""
 
@@ -131,7 +130,6 @@ class AboutDialog(QDialog):
 
         Photo {photolink} copyright © 2023 Damon Lynch, all rights reserved.
         
-        Program icon courtesy of {program_icon}.
         Video folder courtesy of {video_folder}.
         Sound effect courtesy of {sound_pixabay}.
         
