@@ -250,10 +250,12 @@ class MainWindow(QMainWindow):
         if not (title or year or imdb_id):
             return
 
-        if imdb_id:
-            imdb_id = imdb_id[2:]
-            if not imdb_id.isdigit():
-                return
+        if len(imdb_id) < 2:
+            return
+
+        imdb_id = imdb_id[2:]
+        if not imdb_id.isdigit():
+            return
 
         self.progressBar.setRange(0, 0)
         worker = Worker(fetch_movie_info, title, year, imdb_id)
