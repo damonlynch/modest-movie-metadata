@@ -37,6 +37,5 @@ GPL 3.0 or later.
 
 ## Credits
 
-- Program icon created by [Smashicons - Flaticon](https://www.flaticon.com/free-icon/letter-m_6431117).
 - Video folder icon created by [Smashicons - Flaticon](https://www.flaticon.com/free-icon/video_6302563).
 - Sound effects from [Pixabay](https://pixabay.com/sound-effects/game-ui-sounds-14857/). 
