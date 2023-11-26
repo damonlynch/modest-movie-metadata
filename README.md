@@ -27,6 +27,18 @@ Tested under Windows 10 and 11.
 
 This project is not affiliated with Jellyfin or IMDb.
 
+## Installation
+
+To install the program on Windows, click on the
+[Releases link here in GitHub](https://github.com/damonlynch/modest-movie-metadata/releases), 
+and download the installer for the latest version.
+
+The installer is only for 64-bit Windows 10 and 11. It should work equally 
+well on Linux and macOS, but to use it you need to know how to install Python 
+packages and run a Python script. If somebody would like to volunteer to 
+produce a macOS installer, I would be delighted (I don’t own a Mac myself). 
+If there is demand, I can create a Linux installer.  
+
 ## Licence
 GPL 3.0 or later.
 
