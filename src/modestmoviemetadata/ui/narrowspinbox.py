@@ -2,7 +2,7 @@
 # SPDX - License - Identifier: GPL-3.0-or-later
 
 from qtpy.QtCore import QSize
-from qtpy.QtWidgets import QSpinBox, QStyleOptionSpinBox, QStyle
+from qtpy.QtWidgets import QSpinBox, QStyle, QStyleOptionSpinBox
 
 
 class NarrowSpinbox(QSpinBox):

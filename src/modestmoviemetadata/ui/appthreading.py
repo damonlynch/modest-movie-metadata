@@ -3,8 +3,7 @@
 
 import sys
 
-from qtpy.QtCore import QRunnable, Slot, QObject, Signal
-
+from qtpy.QtCore import QObject, QRunnable, Signal, Slot
 
 # Taken from "Multithreading PyQt5 applications with QThreadPool"
 # https://www.pythonguis.com/tutorials/multithreading-pyqt-applications-qthreadpool/
@@ -49,7 +48,7 @@ class Worker(QRunnable):
     """
 
     def __init__(self, fn, *args, **kwargs):
-        super(Worker, self).__init__()
+        super().__init__()
         # Store constructor arguments (re-used for processing)
         self.fn = fn
         self.args = args
@@ -57,7 +56,7 @@ class Worker(QRunnable):
         self.signals = WorkerSignals()
 
         # Add the callback to our kwargs
-        self.kwargs['progress_callback'] = self.signals.progress
+        self.kwargs["progress_callback"] = self.signals.progress
 
     @Slot()
     def run(self):
@@ -68,7 +67,7 @@ class Worker(QRunnable):
         # Retrieve args/kwargs here; and fire processing using them
         try:
             result = self.fn(*self.args, **self.kwargs)
-        except:
+        except Exception:
             self.signals.error.emit(sys.exception())
         else:
             self.signals.result.emit(result)  # Return the result of the processing

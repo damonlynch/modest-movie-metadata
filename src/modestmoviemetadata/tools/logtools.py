@@ -1,11 +1,11 @@
 # Copyright (c) 2022-2023 Damon Lynch
 # SPDX - License - Identifier: GPL-3.0-or-later
 
+import gzip
 import logging
+import os
 import sys
 from logging.handlers import RotatingFileHandler
-import gzip
-import os
 from pathlib import Path
 
 try:
@@ -13,7 +13,7 @@ try:
 except ImportError:
     colorlog = None
 
-from ..config import logfile_name, application_name
+from ..config import application_name, logfile_name
 
 logging_format = "%(levelname)s: %(message)s"
 colored_logging_format = "%(log_color)s%(levelname)-8s%(reset)s %(message)s"
@@ -34,9 +34,8 @@ class RotatingGzipFileHandler(RotatingFileHandler):
         return name + ".gz"
 
     def rotate(self, source, dest):
-        with open(source, "rb") as sf:
-            with gzip.open(dest, "wb") as df:
-                df.writelines(sf)
+        with open(source, "rb") as sf, gzip.open(dest, "wb") as df:
+            df.writelines(sf)
         os.remove(source)
 
 
@@ -93,7 +92,7 @@ def setup_main_process_logging(
     logger = get_logger()
     max_bytes = 1024 * 1024  # 1 MB
     filehandler = RotatingGzipFileHandler(
-        str(log_file), maxBytes=max_bytes, backupCount=10, encoding = 'utf-8'
+        str(log_file), maxBytes=max_bytes, backupCount=10, encoding="utf-8"
     )
     filehandler.setLevel(logging.DEBUG)
     filehandler.setFormatter(
@@ -104,7 +103,7 @@ def setup_main_process_logging(
 
     consolehandler = logging.StreamHandler()
     consolehandler.set_name("console")
-    if 'colorlog' in sys.modules:
+    if "colorlog" in sys.modules:
         consolehandler.setFormatter(
             colorlog.ColoredFormatter(fmt=colored_logging_format, log_colors=log_colors)
         )

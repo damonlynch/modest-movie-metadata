@@ -6,17 +6,14 @@ from qtpy.QtCore import (
     Qt,
 )
 from qtpy.QtGui import (
-    QImage,
     QColor,
+    QImage,
 )
 from qtpy.QtWidgets import QGroupBox, QWidget
 
 
 def boxBorderColor(widget: QWidget | None = None) -> QColor:
-    if widget:
-        frame = widget
-    else:
-        frame = QGroupBox()
+    frame = widget if widget else QGroupBox()
     image = QImage(10, 10, QImage.Format.Format_ARGB32_Premultiplied)
     image.fill(QColor(Qt.GlobalColor.white))
     frame.render(image)

@@ -2,32 +2,30 @@
 # SPDX - License - Identifier: GPL-3.0-or-later
 
 
-from qtpy.QtCore import Slot, QObject, QThreadPool, QTimer, QSize
+from qtpy.QtCore import QObject, QSize, QThreadPool, QTimer, Slot
 from qtpy.QtGui import QGuiApplication, QIcon, QPixmap
-
 from qtpy.QtWidgets import (
-    QMainWindow,
-    QVBoxLayout,
-    QHBoxLayout,
-    QGridLayout,
-    QWidget,
     QDialogButtonBox,
-    QPushButton,
-    QProgressBar,
+    QGridLayout,
+    QHBoxLayout,
     QLabel,
+    QMainWindow,
+    QProgressBar,
+    QVBoxLayout,
+    QWidget,
 )
 
-from .aboutdialog import AboutDialog
-from .appthreading import Worker
-from .selectrecord import SelectRecord
-from .fancylineedit import FancyLineEdit
-from .narrowspinbox import NarrowSpinbox
 from ..config import application_name
 from ..tools.audiotools import play_sound
 from ..tools.logtools import get_logger
-from ..tools.movieinfo import fetch_movie_info, MovieInfo, sanitise_title, get_imdb
+from ..tools.movieinfo import MovieInfo, fetch_movie_info, get_imdb, sanitise_title
 from ..tools.utilities import program_icon_path, video_folder_path
 from ..tools.viewutils import boxBorderColor
+from .aboutdialog import AboutDialog
+from .appthreading import Worker
+from .fancylineedit import FancyLineEdit
+from .narrowspinbox import NarrowSpinbox
+from .selectrecord import SelectRecord
 
 logger = get_logger()
 
@@ -37,7 +35,6 @@ class MainWindow(QMainWindow):
         self,
         parent: QObject = None,
     ) -> None:
-
         super().__init__(parent)
 
         self.setWindowTitle(application_name)
@@ -147,26 +144,18 @@ class MainWindow(QMainWindow):
             | QDialogButtonBox.StandardButtons.Help
         )
 
-        self.aboutButton = self.buttonBox.button(
-            QDialogButtonBox.StandardButton.Help
-        )  # type: QPushButton
+        self.aboutButton = self.buttonBox.button(QDialogButtonBox.StandardButton.Help)
         self.aboutButton.clicked.connect(self.aboutButtonClicked)
         self.aboutButton.setText("About")
 
-        self.resetButton = self.buttonBox.button(
-            QDialogButtonBox.StandardButton.Reset
-        )  # type: QPushButton
+        self.resetButton = self.buttonBox.button(QDialogButtonBox.StandardButton.Reset)
         self.resetButton.clicked.connect(self.resetButtonClicked)
 
-        self.copyButton = self.buttonBox.button(
-            QDialogButtonBox.StandardButton.Apply
-        )  # type: QPushButton
+        self.copyButton = self.buttonBox.button(QDialogButtonBox.StandardButton.Apply)
         self.copyButton.setText("&Copy")
         self.copyButton.clicked.connect(self.copyButtonClicked)
 
-        self.getButton = self.buttonBox.button(
-            QDialogButtonBox.StandardButton.Open
-        )  # type: QPushButton
+        self.getButton = self.buttonBox.button(QDialogButtonBox.StandardButton.Open)
         self.getButton.setText("&Get")
         self.getButton.clicked.connect(self.getButtonClicked)
 

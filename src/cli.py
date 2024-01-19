@@ -4,12 +4,13 @@
 
 try:
     from icecream import install
+
     install()
 
 except ImportError:  # Graceful fallback if IceCream isn't installed.
     ic = lambda *a: None if not a else (a[0] if len(a) == 1 else a)  # noqa
-    builtins = __import__('builtins')
-    setattr(builtins, 'ic', ic)
+    builtins = __import__("builtins")
+    setattr(builtins, "ic", ic)
 
 from modestmoviemetadata.modestmoviemetadata import main
 

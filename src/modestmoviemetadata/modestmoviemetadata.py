@@ -1,9 +1,10 @@
 import logging
-from pathlib import Path
 import sys
+from pathlib import Path
 
-from .singleapplication import QtSingleApplication
-from .config import application_name, application_summary, version, app_guid
+from qtsingleapplication.singleapplication import QtSingleApplication
+
+from .config import app_guid, application_name
 from .tools.filetools import program_appdata_directory, windows_user_profile_directory
 from .tools.logtools import setup_main_process_logging
 from .ui.mainwindow import MainWindow
@@ -11,10 +12,12 @@ from .ui.mainwindow import MainWindow
 try:
     # Ensure the program's icon is displayed in the Windows taskbar
     from ctypes import windll
+
     myappid = "damonlynch.modest.movie.metadata.1"
     windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
 except ImportError:
-    myappid=None
+    myappid = None
+
 
 def main():
     logging_level = logging.DEBUG

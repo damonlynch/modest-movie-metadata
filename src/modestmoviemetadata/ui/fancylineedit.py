@@ -3,7 +3,7 @@
 
 
 from qtpy.QtCore import Signal
-from qtpy.QtGui import QKeyEvent, QKeySequence, QFocusEvent, QMouseEvent
+from qtpy.QtGui import QFocusEvent, QKeyEvent, QKeySequence, QMouseEvent
 from qtpy.QtWidgets import QLineEdit
 
 

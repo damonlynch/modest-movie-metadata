@@ -1,36 +1,33 @@
-# Copyright (c) 2016-2022 Damon Lynch
+# Copyright (c) 2016-2024 Damon Lynch
 # SPDX - License - Identifier: GPL-3.0-or-later
 
-from qtpy.QtCore import Qt, Slot, QObject, QPointF
-import qtpy.QtCore as QtCore
 import qtpy
+import qtpy.QtCore as QtCore
+from qtpy.QtCore import QObject, QPointF, Qt, Slot
 from qtpy.QtGui import (
+    QColor,
     QFont,
+    QFontMetricsF,
     QImage,
     QPainter,
-    QFontMetricsF,
     QPaintEvent,
-    QPixmap,
     QPen,
-    QColor,
+    QPixmap,
 )
-
-
 from qtpy.QtWidgets import (
     QDialog,
-    QLabel,
-    QVBoxLayout,
     QDialogButtonBox,
-    QSizePolicy,
     QHBoxLayout,
-    QStackedWidget,
-    QWidget,
+    QLabel,
     QScrollArea,
-    QPushButton,
+    QSizePolicy,
+    QStackedWidget,
+    QVBoxLayout,
+    QWidget,
 )
 
+from ..config import application_name, copyright_message, version
 from ..tools.utilities import data_file_path, pyqt_api
-from ..config import version, application_name, copyright_message
 
 
 class AboutDialog(QDialog):
@@ -48,7 +45,7 @@ class AboutDialog(QDialog):
 
         self.setObjectName("AboutDialog")
         self.setStyleSheet(
-            "QDialog#AboutDialog {background-image: url(%(url)s);}" % dict(url=url)
+            f"QDialog#AboutDialog {{background-image: url({url});}}"
         )
         self.setFixedSize(QImage(str(path)).size())
 
@@ -76,22 +73,20 @@ class AboutDialog(QDialog):
 
         details = QLabel(msg)
 
-        details_style_sheet = """QLabel {
+        details_style_sheet = f"""QLabel {{
         color: black;
-        background-color: %(transparency)s;
+        background-color: {transparency};
         margin-left: 0px;
-        padding-left: %(left_margin)dpx;
+        padding-left: {self.margin}px;
         padding-top: 6px;
         padding-right: 6px;
         padding-bottom: 6px;
-        }""" % dict(
-            left_margin=self.margin, transparency=transparency
-        )
+        }}"""
 
         details.setStyleSheet(details_style_sheet)
         details.setOpenExternalLinks(True)
         details.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Minimum)
-        font = self.font()  # type: QFont
+        font = self.font()
         details.setFont(font)
 
         aboutLayout = QVBoxLayout()
@@ -108,13 +103,29 @@ class AboutDialog(QDialog):
         about.setLayout(aboutLayout)
 
         # Credits view
+        photolink = (
+            '<a href="https://www.flickr.com/photos/damonlynch/53347185963/"'
+            f" {link_style}>High-altitude power poles in Tajikistan</a>"
+        )
 
-        photolink = f"""<a href="https://www.flickr.com/photos/damonlynch/53347185963/" {link_style}>High-altitude power poles in Tajikistan</a>"""
-        video_folder = f'<a href="https://www.flaticon.com/free-icon/video_6302563" {link_style}>Freepik - Flaticon</a>'
-        sound_pixabay = f"""<a href="https://pixabay.com/sound-effects/game-ui-sounds-14857/" {link_style}>Pixabay</a>"""
+        video_folder = (
+            '<a href="https://www.flaticon.com/free-icon/video_6302563"'
+            f" {link_style}>Freepik - Flaticon</a>"
+        )
 
-        gpl3desc = f', licensed under the <a href="{gpl3link}" {link_style}>GNU General Public License, version 3</a>'
-        lgpl3desc = f', licensed under the <a href="{lgpl3link}" {link_style}>GNU Lesser General Public License, version 3</a>'
+        sound_pixabay = (
+            '<a href="https://pixabay.com/sound-effects/game-ui-sounds-14857/"'
+            f" {link_style}>Pixabay</a>"
+        )
+
+        gpl3desc = (
+            f', licensed under the <a href="{gpl3link}"'
+            f" {link_style}>GNU General Public License, version 3</a>"
+        )
+        lgpl3desc = (
+            f', licensed under the <a href="{lgpl3link}"'
+            f" {link_style}>GNU Lesser General Public License, version 3</a>"
+        )
 
         if pyqt_api():
             api_version = qtpy.PYQT_VERSION
@@ -139,16 +150,14 @@ class AboutDialog(QDialog):
 
         credits_text = credits_text.replace("\n", "<br>\n")
 
-        label_style_sheet = """QLabel {
+        label_style_sheet = f"""QLabel {{
         background-color: rgba(0, 0, 0, 0);
         color: black;
-        padding-left: %(left_margin)dpx;
+        padding-left: {self.margin}px;
         padding-top: 6px;
         padding-right: 6px;
         padding-bottom: 6px;
-        }""" % dict(
-            left_margin=self.margin
-        )
+        }}"""
 
         creditsLabel = QLabel(credits_text)
         creditsLabel.setFont(font)
@@ -157,13 +166,10 @@ class AboutDialog(QDialog):
 
         credits = QScrollArea()
         credits.setWidget(creditsLabel)
-        scroll_area_style_sheet = """QScrollArea {
-        background-color: %(transparency)s;
+        scroll_area_style_sheet = f"""QScrollArea {{
+        background-color: {transparency};
         border: 0px;
-        }
-        """ % dict(
-            transparency=transparency
-        )
+        }}"""
         credits.setStyleSheet(scroll_area_style_sheet)
 
         mainLayout = QVBoxLayout()
@@ -176,12 +182,10 @@ class AboutDialog(QDialog):
         )
 
         buttonBox = QDialogButtonBox()
-        closeButton = buttonBox.addButton(
-            QDialogButtonBox.StandardButton.Close
-        )  # type: QPushButton
+        closeButton = buttonBox.addButton(QDialogButtonBox.StandardButton.Close)
         self.creditsButton = buttonBox.addButton(
             "Credits", QDialogButtonBox.ButtonRole.HelpRole
-        )  # type: QPushButton
+        )
         self.creditsButton.setDefault(False)
         self.creditsButton.setCheckable(True)
         closeButton.setDefault(True)

@@ -2,27 +2,28 @@
 # SPDX - License - Identifier: GPL-3.0-or-later
 
 
-from typing import Any
 import webbrowser
+from typing import Any
 
 from qtpy.QtCore import (
+    QAbstractTableModel,
+    QModelIndex,
+    Qt,
     Signal,
     Slot,
-    Qt,
-    QModelIndex,
-    QAbstractTableModel,
 )
 from qtpy.QtGui import (
     QColor,
 )
 from qtpy.QtWidgets import (
-    QMainWindow,
-    QStyle,
-    QVBoxLayout,
-    QTableView,
     QDialog,
     QDialogButtonBox,
+    QMainWindow,
+    QStyle,
+    QTableView,
+    QVBoxLayout,
 )
+
 from ..tools.movieinfo import MovieInfo, make_imdb_url
 
 
@@ -100,7 +101,7 @@ class MoviesModel(QAbstractTableModel):
         if role == Qt.ItemDataRole.ForegroundRole and column == 2:
             return QColor("blue")
 
-        if not role in (Qt.ItemDataRole.DisplayRole, Qt.ItemDataRole.UserRole):
+        if role not in (Qt.ItemDataRole.DisplayRole, Qt.ItemDataRole.UserRole):
             return
 
         info = self.movie_infos[row]

@@ -4,3 +4,26 @@ requires = [
     "wheel"
 ]
 build-backend = "setuptools.build_meta"
+
+[tool.ruff]
+line-length = 88
+indent-width = 4
+builtins = ["ic"]
+
+[tool.ruff.lint]
+select = [
+    # pycodestyle
+    "E",
+    # Pyflakes
+    "F",
+    # pyupgrade
+    "UP",
+    # flake8-simplify
+    "SIM",
+    # isort
+    "I",
+]
+extend-select = [
+  "E501",
+  "UP",  # pyupgrade
+]

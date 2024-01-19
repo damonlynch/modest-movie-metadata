@@ -1,10 +1,9 @@
 # Copyright (c) 2022-2023 Damon Lynch
 # SPDX - License - Identifier: GPL-3.0-or-later
 
+import re
 from collections.abc import Callable
 from dataclasses import dataclass
-import re
-
 
 from imdb import Cinemagoer, IMDbError, Movie
 
@@ -38,7 +37,6 @@ def fetch_movie_info(
     imdb_id: str,
     progress_callback: Callable[[int], None],
 ) -> list[MovieInfo]:
-
     ia = Cinemagoer()
 
     if imdb_id:
