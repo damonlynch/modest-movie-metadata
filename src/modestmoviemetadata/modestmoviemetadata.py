@@ -2,12 +2,11 @@ import logging
 import sys
 from pathlib import Path
 
-from qtsingleapplication.singleapplication import QtSingleApplication
-
 from .config import app_guid, application_name
 from .tools.filetools import program_appdata_directory, windows_user_profile_directory
 from .tools.logtools import setup_main_process_logging
 from .ui.mainwindow import MainWindow
+from .ui.qtsingleapplication import QtSingleApplication
 
 try:
     # Ensure the program's icon is displayed in the Windows taskbar

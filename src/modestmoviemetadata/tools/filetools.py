@@ -13,7 +13,6 @@ from .logtools import get_logger
 logger = get_logger()
 
 
-
 def windows_appdata_directory() -> str:
     return str(
         Path(

@@ -44,9 +44,7 @@ class AboutDialog(QDialog):
         url = path.as_posix()
 
         self.setObjectName("AboutDialog")
-        self.setStyleSheet(
-            f"QDialog#AboutDialog {{background-image: url({url});}}"
-        )
+        self.setStyleSheet(f"QDialog#AboutDialog {{background-image: url({url});}}")
         self.setFixedSize(QImage(str(path)).size())
 
         self.margin = 16

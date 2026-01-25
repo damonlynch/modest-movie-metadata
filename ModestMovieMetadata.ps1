@@ -1,3 +1,2 @@
-.\venv\Scripts\Activate.ps1
-. $PROFILE
-python src\cli.py
+uv sync
+uv run src\cli.py
