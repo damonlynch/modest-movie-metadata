@@ -1,5 +1,5 @@
-# Copyright (c) 2016-2024 Damon Lynch
-# SPDX - License - Identifier: GPL-3.0-or-later
+#  SPDX-FileCopyrightText: 2022-2026 Damon Lynch <damonlynch@gmail.com>
+#  SPDX-License-Identifier: GPL-3.0-or-later
 
 import qtpy
 import qtpy.QtCore as QtCore

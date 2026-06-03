@@ -1,8 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="Black">
-    <option name="pathToExecutable" value="C:\Users\Damon Lynch\AppData\Local\Programs\Python\Python311\Scripts\black.exe" />
-    <option name="sdkName" value="Python 3.12 (modest-movie-metadata)" />
+    <option name="sdkName" value="uv (modest-movie-metadata)" />
   </component>
   <component name="ProjectRootManager" version="2" project-jdk-name="uv (modest-movie-metadata)" project-jdk-type="Python SDK" />
   <component name="PythonCompatibilityInspectionAdvertiser">

@@ -1,0 +1,3 @@
+<component name="DependencyValidationManager">
+  <scope name="Damon Lynch exclusive GPL3 code" pattern="file:src//*.py" />
+</component>

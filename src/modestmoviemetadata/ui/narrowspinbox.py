@@ -1,5 +1,5 @@
-# Copyright (c) 2023 Damon Lynch
-# SPDX - License - Identifier: GPL-3.0-or-later
+#  SPDX-FileCopyrightText: 2023-2026 Damon Lynch <damonlynch@gmail.com>
+#  SPDX-License-Identifier: GPL-3.0-or-later
 
 from qtpy.QtCore import QSize
 from qtpy.QtWidgets import QSpinBox, QStyle, QStyleOptionSpinBox
