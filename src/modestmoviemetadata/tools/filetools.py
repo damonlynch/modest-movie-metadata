@@ -7,8 +7,8 @@ from qtpy.QtCore import (
     QStandardPaths,
 )
 
-from ..config import application_name
-from .logtools import get_logger
+from modestmoviemetadata.config import application_name
+from modestmoviemetadata.tools.logtools import get_logger
 
 logger = get_logger()
 

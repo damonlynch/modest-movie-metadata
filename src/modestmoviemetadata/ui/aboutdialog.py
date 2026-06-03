@@ -26,8 +26,8 @@ from qtpy.QtWidgets import (
     QWidget,
 )
 
-from ..config import application_name, copyright_message, version
-from ..tools.utilities import data_file_path, pyqt_api
+from modestmoviemetadata.config import application_name, copyright_message, version
+from modestmoviemetadata.tools.utilities import data_file_path, pyqt_api
 
 
 class AboutDialog(QDialog):

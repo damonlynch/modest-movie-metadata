@@ -3,7 +3,7 @@
 
 import importlib.metadata
 
-from . import __version__
+from modestmoviemetadata import __version__
 
 application_name = "Modest Movie Metadata"
 application_identifier = "modest-movie-metadata"

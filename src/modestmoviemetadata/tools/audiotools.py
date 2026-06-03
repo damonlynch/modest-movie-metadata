@@ -7,7 +7,7 @@ from importlib.resources import files
 from qtpy.QtCore import QUrl
 from qtpy.QtMultimedia import QAudioOutput, QMediaPlayer
 
-from ..data import audio
+from modestmoviemetadata.data import audio
 
 player = QMediaPlayer()
 audioOutput = QAudioOutput()

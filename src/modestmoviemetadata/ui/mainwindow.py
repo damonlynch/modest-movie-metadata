@@ -14,17 +14,22 @@ from qtpy.QtWidgets import (
     QWidget,
 )
 
-from ..config import application_name
-from ..tools.audiotools import play_sound
-from ..tools.logtools import get_logger
-from ..tools.movieinfo import MovieInfo, fetch_movie_info, get_imdb, sanitise_title
-from ..tools.utilities import program_icon_path, video_folder_path
-from ..tools.viewutils import boxBorderColor
-from .aboutdialog import AboutDialog
-from .appthreading import Worker
-from .fancylineedit import FancyLineEdit
-from .narrowspinbox import NarrowSpinbox
-from .selectrecord import SelectRecord
+from modestmoviemetadata.config import application_name
+from modestmoviemetadata.tools.audiotools import play_sound
+from modestmoviemetadata.tools.logtools import get_logger
+from modestmoviemetadata.tools.movieinfo import (
+    MovieInfo,
+    fetch_movie_info,
+    get_imdb,
+    sanitise_title,
+)
+from modestmoviemetadata.tools.utilities import program_icon_path, video_folder_path
+from modestmoviemetadata.tools.viewutils import boxBorderColor
+from modestmoviemetadata.ui.aboutdialog import AboutDialog
+from modestmoviemetadata.ui.appthreading import Worker
+from modestmoviemetadata.ui.fancylineedit import FancyLineEdit
+from modestmoviemetadata.ui.narrowspinbox import NarrowSpinbox
+from modestmoviemetadata.ui.selectrecord import SelectRecord
 
 logger = get_logger()
 

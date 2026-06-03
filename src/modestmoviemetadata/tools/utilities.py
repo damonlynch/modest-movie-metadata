@@ -7,7 +7,7 @@ from pathlib import Path
 
 import qtpy
 
-from .. import data
+from modestmoviemetadata import data
 
 
 @cache

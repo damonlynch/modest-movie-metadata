@@ -13,7 +13,7 @@ try:
 except ImportError:
     colorlog = None
 
-from ..config import application_name, logfile_name
+from modestmoviemetadata.config import application_name, logfile_name
 
 logging_format = "%(levelname)s: %(message)s"
 colored_logging_format = "%(log_color)s%(levelname)-8s%(reset)s %(message)s"

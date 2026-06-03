@@ -27,7 +27,7 @@ from qtpy.QtWidgets import (
     QVBoxLayout,
 )
 
-from ..tools.movieinfo import MovieInfo, make_imdb_url
+from modestmoviemetadata.tools.movieinfo import MovieInfo, make_imdb_url
 
 
 class SelectRecord(QDialog):
