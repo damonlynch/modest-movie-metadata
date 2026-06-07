@@ -1,7 +1,7 @@
 #  SPDX-FileCopyrightText: 2022-2026 Damon Lynch <damonlynch@gmail.com>
 #  SPDX-License-Identifier: GPL-3.0-or-later
 
-from qtpy.QtCore import QObject, QSize, QThreadPool, QTimer, Slot
+from qtpy.QtCore import QObject, QSize, Qt, QThreadPool, QTimer, Slot
 from qtpy.QtGui import QGuiApplication, QIcon, QPixmap
 from qtpy.QtWidgets import (
     QDialogButtonBox,
@@ -9,13 +9,20 @@ from qtpy.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QMainWindow,
-    QProgressBar,
+    QMessageBox,
+    QProgressDialog,
     QVBoxLayout,
     QWidget,
 )
 
 from modestmoviemetadata.config import application_name
 from modestmoviemetadata.tools.audiotools import play_sound
+from modestmoviemetadata.tools.database import (
+    database_exists,
+    download_and_convert,
+    dataset_downward_size,
+)
+from modestmoviemetadata.tools.filetools import program_appdata_directory
 from modestmoviemetadata.tools.logtools import get_logger
 from modestmoviemetadata.tools.movieinfo import (
     MovieInfo,
@@ -23,7 +30,11 @@ from modestmoviemetadata.tools.movieinfo import (
     get_imdb,
     sanitise_title,
 )
-from modestmoviemetadata.tools.utilities import program_icon_path, video_folder_path
+from modestmoviemetadata.tools.utilities import (
+    program_icon_path,
+    video_folder_path,
+    format_bytes,
+)
 from modestmoviemetadata.tools.viewutils import boxBorderColor
 from modestmoviemetadata.ui.aboutdialog import AboutDialog
 from modestmoviemetadata.ui.appthreading import Worker
@@ -90,10 +101,6 @@ class MainWindow(QMainWindow):
 
         self.setupButtonBox()
 
-        self.progressBar = QProgressBar()
-        self.progressBar.setTextVisible(False)
-        self.progressBar.setMaximumWidth(100)
-
         folderLayout = QHBoxLayout()
         folderLayout.addWidget(self.folderIconLabel)
         folderLayout.addWidget(self.folderLabel)
@@ -133,12 +140,18 @@ class MainWindow(QMainWindow):
 
         self.setCentralWidget(mainWidget)
 
-        # Activate the status bar
-        self.statusBar()
-        self.statusBar().addPermanentWidget(self.progressBar)
-
         self.resize(QSize(600, 10))
         self.show()
+        if program_appdata_directory() is None:
+            QMessageBox.critical(
+                self,
+                "Modest Movie Metadata Critical Error",
+                "The program's Application Data directory cannot be created. "
+                "The program will now exit.",
+            )
+            QTimer.singleShot(0, self.close)
+        elif not database_exists():
+            QTimer.singleShot(0, self.datasetRequired)
 
     def setupButtonBox(self) -> None:
         self.buttonBox = QDialogButtonBox(
@@ -151,17 +164,31 @@ class MainWindow(QMainWindow):
         self.aboutButton = self.buttonBox.button(QDialogButtonBox.StandardButton.Help)
         self.aboutButton.clicked.connect(self.aboutButtonClicked)
         self.aboutButton.setText("About")
+        self.aboutButton.setToolTip("Information about the program")
 
         self.resetButton = self.buttonBox.button(QDialogButtonBox.StandardButton.Reset)
         self.resetButton.clicked.connect(self.resetButtonClicked)
+        self.resetButton.setToolTip("Reset")
+        self.resetButton.setToolTip("Clear the IMDb, Title and Year values")
 
         self.copyButton = self.buttonBox.button(QDialogButtonBox.StandardButton.Apply)
         self.copyButton.setText("&Copy")
         self.copyButton.clicked.connect(self.copyButtonClicked)
+        self.copyButton.setToolTip("Copy the Jellyfin folder name to the clipboard")
 
         self.getButton = self.buttonBox.button(QDialogButtonBox.StandardButton.Open)
-        self.getButton.setText("&Get")
+        self.getButton.setText("&Generate")
         self.getButton.clicked.connect(self.getButtonClicked)
+        self.getButton.setToolTip("Generate the Jellyfin folder name")
+
+        self.downloadButton = self.buttonBox.addButton(
+            QDialogButtonBox.StandardButton.Reset
+        )
+        self.downloadButton.setText("&Update Database")
+        self.downloadButton.clicked.connect(self.downloadButtonClicked)
+        self.downloadButton.setToolTip(
+            "Update local database using the latest IMDb  dataset"
+        )
 
     @Slot()
     def clipboardDataChanged(self) -> None:
@@ -235,6 +262,48 @@ class MainWindow(QMainWindow):
         self.folderLabel.clear()
 
     @Slot(bool)
+    def downloadButtonClicked(self, checked: bool) -> None:
+
+        self.progressDialog = QProgressDialog(
+            "Checking IMDb dataset...", None, 0, 0, self
+        )
+        self.progressDialog.setMinimumDuration(0)
+        self.progressDialog.setValue(0)
+        self.progressDialog.setWindowModality(Qt.WindowModality.WindowModal)
+        self.progressDialog.setAutoReset(False)
+
+        worker = Worker(download_and_convert)
+        worker.signals.result.connect(self.downloadResult)
+        worker.signals.finished.connect(self.downloadComplete)
+        worker.signals.progress.connect(self.downloadProgress)
+        worker.signals.error.connect(self.downloadException)
+        self.threadpool.start(worker)
+
+    @Slot(tuple)
+    def downloadProgress(self, data: tuple) -> None:
+        text, progress, maximum = data
+        if text and text != self.progressDialog.labelText():
+            self.progressDialog.setLabelText(text)
+        if maximum >= 0:
+            self.progressDialog.setMaximum(maximum)
+        self.progressDialog.setValue(progress)
+
+    @Slot(object)
+    def downloadResult(self, data: object) -> None:
+        pass
+
+    @Slot()
+    def downloadComplete(self) -> None:
+        self.playSound("choh.mp3")
+        self.progressDialog.reset()
+
+    @Slot()
+    def downloadException(self, exception: Exception) -> None:
+        logger.error("Error updating dataset")
+        logger.error("%s", exception)
+        QMessageBox.critical(self, "Error updating dataset", str(exception))
+
+    @Slot(bool)
     def getButtonClicked(self, checked: bool) -> None:
         title = self.titleEdit.text().strip()
         year = self.yearSpinbox.value() or None
@@ -246,11 +315,9 @@ class MainWindow(QMainWindow):
         if len(imdb_id) < 2:
             return
 
-        imdb_id = imdb_id[2:]
-        if not imdb_id.isdigit():
+        if not imdb_id[2:].isdigit():
             return
 
-        self.progressBar.setRange(0, 0)
         worker = Worker(fetch_movie_info, title, year, imdb_id)
         worker.signals.result.connect(self.movieInfoExtracted)
         worker.signals.error.connect(self.movieInfoException)
@@ -258,7 +325,6 @@ class MainWindow(QMainWindow):
 
     @Slot(object)
     def movieInfoExtracted(self, movie_infos: list[MovieInfo]) -> None:
-        self.progressBar.setRange(0, 1)
         movie_info = None
 
         if movie_infos is None:
@@ -299,7 +365,6 @@ class MainWindow(QMainWindow):
 
     @Slot()
     def movieInfoException(self, exception: Exception) -> None:
-        self.progressBar.setRange(0, 1)
         logger.debug("Error getting movie information")
         logger.error("%s: %s", exception.__class__.__name__, str(exception))
         self.playSound("error.mp3")
@@ -308,3 +373,25 @@ class MainWindow(QMainWindow):
     def playSound(self, sound: str) -> None:
         logger.debug("Using Qt to play audio")
         play_sound(soundfile=sound)
+
+    def datasetRequired(self) -> None:
+        worker = Worker(dataset_downward_size)
+        worker.signals.result.connect(self.datasetRequiredSize)
+        self.threadpool.start(worker)
+
+    @Slot(object)
+    def datasetRequiredSize(self, data: object) -> None:
+        size = int(data)
+        if size:
+            ret = QMessageBox.question(
+                self,
+                "Database Required",
+                "To continue this program will download from IMDb a publicly "
+                f"available {format_bytes(size)} dataset.\n\n"
+                "The dataset will then be converted into a database about 1 GB in "
+                "size, which may take a few minutes. "
+                "Without this database, the program is unable to function.\n\n"
+                "Do you want this program to proceed with the download and conversion?",
+            )
+            if ret == QMessageBox.StandardButton.No:
+                self.close()

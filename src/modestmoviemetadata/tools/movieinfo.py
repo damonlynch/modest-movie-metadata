@@ -7,6 +7,8 @@ from dataclasses import dataclass
 
 from imdb import Cinemagoer, IMDbError, Movie
 
+from modestmoviemetadata.tools.database import query_by_imdb_id
+
 
 @dataclass
 class MovieInfo:
@@ -40,15 +42,19 @@ def fetch_movie_info(
     ia = Cinemagoer()
 
     if imdb_id:
-        try:
-            movie = ia.get_movie(imdb_id)
-        except IMDbError as inst:
-            ic(inst)
-        else:
-            title = movie.get("title")
-            year = get_year(movie)
-
+        data = query_by_imdb_id(imdb_id)
+        if data is not None:
+            title, year = data
             return [MovieInfo(title=title, year=year, imdb_id=imdb_id)]
+        # try:
+        #     movie = ia.get_movie(imdb_id)
+        # except IMDbError as inst:
+        #     ic(inst)
+        # else:
+        #     title = movie.get("title")
+        #     year = get_year(movie)
+        #
+        #     return [MovieInfo(title=title, year=year, imdb_id=imdb_id)]
 
     else:
         try:

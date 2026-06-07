@@ -30,7 +30,7 @@ class WorkerSignals(QObject):
     finished = Signal()
     error = Signal(Exception)
     result = Signal(object)
-    progress = Signal(int)
+    progress = Signal(tuple)
 
 
 class Worker(QRunnable):

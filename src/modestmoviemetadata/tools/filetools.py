@@ -33,6 +33,16 @@ def windows_user_profile_directory() -> str:
     )
 
 
+def standard_temp_directory() -> str:
+    return str(
+        Path(
+            QStandardPaths.writableLocation(
+                QStandardPaths.StandardLocation.TempLocation
+            )
+        )
+    )
+
+
 def program_appdata_directory() -> Path | None:
     appdata_dir = Path(windows_appdata_directory()) / application_name
     if not appdata_dir.is_dir():
@@ -42,3 +52,9 @@ def program_appdata_directory() -> Path | None:
             logger.exception(e)
             return None
     return appdata_dir
+
+
+def imdb_db_path() -> Path:
+    path = program_appdata_directory()
+    assert path is not None
+    return path / "imdb.db"
