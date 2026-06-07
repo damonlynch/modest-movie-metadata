@@ -1,7 +1,7 @@
 #  SPDX-FileCopyrightText: 2022-2026 Damon Lynch <damonlynch@gmail.com>
 #  SPDX-License-Identifier: GPL-3.0-or-later
 
-from qtpy.QtCore import QObject, QSize, Qt, QThreadPool, QTimer, Slot
+from qtpy.QtCore import QObject, QSettings, QSize, Qt, QThreadPool, QTimer, Slot
 from qtpy.QtGui import QGuiApplication, QIcon, QPixmap
 from qtpy.QtWidgets import (
     QDialogButtonBox,
@@ -19,8 +19,8 @@ from modestmoviemetadata.config import application_name
 from modestmoviemetadata.tools.audiotools import play_sound
 from modestmoviemetadata.tools.database import (
     database_exists,
-    download_and_convert,
     dataset_downward_size,
+    download_and_convert,
 )
 from modestmoviemetadata.tools.filetools import program_appdata_directory
 from modestmoviemetadata.tools.logtools import get_logger
@@ -31,9 +31,9 @@ from modestmoviemetadata.tools.movieinfo import (
     sanitise_title,
 )
 from modestmoviemetadata.tools.utilities import (
+    format_bytes,
     program_icon_path,
     video_folder_path,
-    format_bytes,
 )
 from modestmoviemetadata.tools.viewutils import boxBorderColor
 from modestmoviemetadata.ui.aboutdialog import AboutDialog
@@ -55,6 +55,8 @@ class MainWindow(QMainWindow):
         self.setWindowTitle(application_name)
         self.setWindowIcon(QIcon(program_icon_path()))
 
+        self.settings = QSettings()
+
         self.threadpool = QThreadPool()
         self.threadpool.setMaxThreadCount(1)
 
@@ -62,6 +64,9 @@ class MainWindow(QMainWindow):
         self.clipboard.changed.connect(self.clipboardDataChanged)
 
         self.folderIconLabel = QLabel()
+
+        self.lookup_after_dataset_refresh_needed = False
+        self.inform_dataset_downloaded = False
 
         pixmap = QPixmap(video_folder_path())
         self.folderIconLabel.setPixmap(pixmap)
@@ -261,6 +266,12 @@ class MainWindow(QMainWindow):
         self.imdbEdit.clear()
         self.folderLabel.clear()
 
+    def resetContentsExceptIMDbId(self) -> None:
+        self.titleEdit.clear()
+        self.yearSpinbox.setValue(0)
+        self.yearSpinbox.clear()
+        self.folderLabel.clear()
+
     @Slot(bool)
     def downloadButtonClicked(self, checked: bool) -> None:
 
@@ -272,7 +283,7 @@ class MainWindow(QMainWindow):
         self.progressDialog.setWindowModality(Qt.WindowModality.WindowModal)
         self.progressDialog.setAutoReset(False)
 
-        worker = Worker(download_and_convert)
+        worker = Worker(download_and_convert, self.settings.value("Last_Modified", ""))
         worker.signals.result.connect(self.downloadResult)
         worker.signals.finished.connect(self.downloadComplete)
         worker.signals.progress.connect(self.downloadProgress)
@@ -289,13 +300,24 @@ class MainWindow(QMainWindow):
         self.progressDialog.setValue(progress)
 
     @Slot(object)
-    def downloadResult(self, data: object) -> None:
-        pass
+    def downloadResult(self, data: str) -> None:
+        if data == "ALREADY_DOWNLOADED":
+            QMessageBox.information(
+                self, "IMDb Database", "You already have the most recent database."
+            )
+        elif data:
+            self.inform_dataset_downloaded = True
+            self.settings.setValue("Last_Modified", data)
 
     @Slot()
     def downloadComplete(self) -> None:
-        self.playSound("choh.mp3")
+        if self.inform_dataset_downloaded:
+            self.playSound("choh.mp3")
+            self.inform_dataset_downloaded = False
+
         self.progressDialog.reset()
+        if self.lookup_after_dataset_refresh_needed:
+            QTimer.singleShot(0, self.getButton.clicked.emit)
 
     @Slot()
     def downloadException(self, exception: Exception) -> None:
@@ -324,7 +346,7 @@ class MainWindow(QMainWindow):
         self.threadpool.start(worker)
 
     @Slot(object)
-    def movieInfoExtracted(self, movie_infos: list[MovieInfo]) -> None:
+    def movieInfoExtracted(self, movie_infos: list[MovieInfo | None]) -> None:
         movie_info = None
 
         if movie_infos is None:
@@ -332,7 +354,28 @@ class MainWindow(QMainWindow):
 
         if len(movie_infos) == 1:
             movie_info = movie_infos[0]
-            self.playSound("choh.mp3")
+            # Was the information found in the local database using the IMDb id?
+            if (
+                movie_info.title == ""
+                and movie_info.year is None
+                and movie_info.imdb_id
+            ):
+                # It wasn't
+                self.resetContentsExceptIMDbId()
+                if not self.lookup_after_dataset_refresh_needed:
+                    ret = QMessageBox.question(
+                        self,
+                        "Update local database?",
+                        "The IMDb id is not found in the local database.\n\n"
+                        "Do you want to update the local database using the latest "
+                        "IMDb dataset?",
+                    )
+                    if ret == QMessageBox.StandardButton.Yes:
+                        self.lookup_after_dataset_refresh_needed = True
+                        QTimer.singleShot(0, self.downloadButton.clicked.emit)
+                else:
+                    # The dataset was already refreshed — don't prompt again
+                    self.lookup_after_dataset_refresh_needed = False
 
         elif len(movie_infos) > 1:
             self.playSound("brrr.mp3")

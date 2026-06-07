@@ -248,6 +248,8 @@ def create_db(dataset: Path, progress_callback: SignalInstance):
             column_mapping=column_mapping,
             progress_callback=progress_callback,
         )
+    logger.debug("Deleting dataset")
+    dataset.unlink()
     logger.debug("Creating database index ...")
     progress_callback.emit(("Optimizing database...", 0, 0))
     db.create_indices()

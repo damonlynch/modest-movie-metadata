@@ -26,19 +26,31 @@ from modestmoviemetadata.tools.utilities import format_bytes
 logger = get_logger()
 
 
-def download_needed(path: Path, url: str) -> bool:
-    # Does the file already exist?
-    if not path.is_file():
+def convert_last_modified_header(web_mtime: str) -> datetime:
+    """
+    Convert web timestamp to a timezone-aware datetime object
+    :param web_mtime:  web header timestamp, e.g. 'Sat, 06 Jun 2026 12:43:17 GMT'
+    :return:  datetime object, e.g. datetime(2026, 6, 6, 12, 43, 17, tzinfo=datetime.timezone.utc)
+    """
+    web_dt = parsedate_to_datetime(web_mtime)
+    # Strip microseconds
+    return web_dt.replace(microsecond=0)
+
+
+def download_needed(last_modified: str, url: str) -> bool:
+    if not last_modified:
         return True
 
-    # Get file modification time in UTC
-    local_mtime_timestamp = path.stat().st_mtime
-    local_dt = datetime.fromtimestamp(local_mtime_timestamp, tz=UTC)
+    try:
+        last_modified_dt = datetime.fromisoformat(last_modified)
+    except ValueError:
+        logger.error("Invalid Last Modified ISO date time value %s", last_modified)
+        return True
 
     response = requests.head(url, timeout=5)
-    web_mtime_str = response.headers.get("Last-Modified")
+    web_mtime = response.headers.get("Last-Modified")
 
-    if not web_mtime_str:
+    if not web_mtime:
         logger.warning(
             "Server did not provide a Last-Modified header for %s. "
             "Cannot compare file date and time.",
@@ -46,22 +58,17 @@ def download_needed(path: Path, url: str) -> bool:
         )
         return True
 
-    # Convert web timestamp to a timezone-aware datetime object
-    web_dt = parsedate_to_datetime(web_mtime_str)
+    web_dt = convert_last_modified_header(web_mtime)
 
-    # Compare timestamps (Stripping microseconds for a perfectly clean comparison)
-    local_dt_clean = local_dt.replace(microsecond=0)
-    web_dt_clean = web_dt.replace(microsecond=0)
+    logger.debug("Local File Time (UTC): %s", last_modified_dt)
+    logger.debug("Web Server Time (UTC): %s", web_dt)
 
-    logger.debug("Local File Time (UTC): %s", local_dt_clean)
-    logger.debug("Web Server Time (UTC): %s", web_dt_clean)
-
-    return web_dt_clean > local_dt_clean
+    return web_dt > last_modified_dt
 
 
 def do_download(
     url: str, name: str, path: Path, progress_callback: SignalInstance
-) -> None:
+) -> str:
     logger.debug("Downloading %s", name)
 
     with requests.get(url, stream=True, timeout=15) as response:
@@ -70,7 +77,7 @@ def do_download(
         # Fetch total file size and file modification time from response header
         total_size = int(response.headers.get("content-length", 0))
         downloaded_size = 0
-        web_mtime_str = response.headers.get("Last-Modified")
+        web_mtime = response.headers.get("Last-Modified")
 
         progress_callback.emit(
             (
@@ -96,20 +103,12 @@ def do_download(
                 path.unlink()
             shutil.move(temp_path, path)
 
-        if web_mtime_str:
-            logger.debug("Setting local file timestamp to match web file")
-            # Convert RFC 7231 string to a timezone-aware datetime object
-            web_dt = parsedate_to_datetime(web_mtime_str)
-            # Convert datetime object to a Unix timestamp (float) required by
-            # os.utime
-            web_unix_timestamp = web_dt.timestamp()
-
-            # Apply timestamp: (atime, mtime). We apply the web time to both access
-            # and modification
-            os.utime(path, (web_unix_timestamp, web_unix_timestamp))
+        if web_mtime:
+            return convert_last_modified_header(web_mtime).isoformat()
+        return ""
 
 
-def download_and_convert(progress_callback: SignalInstance):
+def download_and_convert(last_modified: str, progress_callback: SignalInstance):
     appdata = program_appdata_directory()
     assert appdata is not None
 
@@ -117,15 +116,14 @@ def download_and_convert(progress_callback: SignalInstance):
     name = QUrl(url).path().lstrip("/")
     path = appdata / name
 
-    if download_needed(path, url):
-        do_download(url, name, path, progress_callback)
-        db_create = True
+    db_create = download_needed(last_modified, url) or not imdb_db_path().exists()
+    if db_create:
+        last_modified_iso = do_download(url, name, path, progress_callback)
+        create_db(dataset=path, progress_callback=progress_callback)
+        return last_modified_iso
     else:
         logger.debug("Most recent IMDb dataset already downloaded")
-        db_create = not imdb_db_path().exists()
-
-    if db_create:
-        create_db(dataset=path, progress_callback=progress_callback)
+        return "ALREADY_DOWNLOADED"
 
 
 def dataset_downward_size(progress_callback: SignalInstance) -> int:

@@ -38,7 +38,7 @@ def fetch_movie_info(
     year: int | None,
     imdb_id: str,
     progress_callback: Callable[[int], None],
-) -> list[MovieInfo]:
+) -> list[MovieInfo] | None:
     ia = Cinemagoer()
 
     if imdb_id:
@@ -46,15 +46,8 @@ def fetch_movie_info(
         if data is not None:
             title, year = data
             return [MovieInfo(title=title, year=year, imdb_id=imdb_id)]
-        # try:
-        #     movie = ia.get_movie(imdb_id)
-        # except IMDbError as inst:
-        #     ic(inst)
-        # else:
-        #     title = movie.get("title")
-        #     year = get_year(movie)
-        #
-        #     return [MovieInfo(title=title, year=year, imdb_id=imdb_id)]
+        else:
+            return [MovieInfo(title="", year=None, imdb_id=imdb_id)]
 
     else:
         try:
