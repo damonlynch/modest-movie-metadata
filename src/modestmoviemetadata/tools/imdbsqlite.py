@@ -209,7 +209,7 @@ def import_file(db, filename, table, column_mapping, progress_callback: SignalIn
 
     progress_callback.emit(
         (
-            f"Creating database ({locale.toString(total_rows)} records)...",
+            f"Creating database ({locale.toString(total_rows)} titles)...",
             0,
             total_rows,
         )

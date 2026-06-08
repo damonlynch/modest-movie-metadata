@@ -1,9 +1,12 @@
 #  SPDX-FileCopyrightText: 2022-2026 Damon Lynch <damonlynch@gmail.com>
 #  SPDX-License-Identifier: GPL-3.0-or-later
 
+from enum import Flag, auto
+
 from qtpy.QtCore import QObject, QSettings, QSize, Qt, QThreadPool, QTimer, Slot
 from qtpy.QtGui import QGuiApplication, QIcon, QPixmap
 from qtpy.QtWidgets import (
+    QCheckBox,
     QDialogButtonBox,
     QGridLayout,
     QHBoxLayout,
@@ -18,9 +21,11 @@ from qtpy.QtWidgets import (
 from modestmoviemetadata.config import application_name
 from modestmoviemetadata.tools.audiotools import play_sound
 from modestmoviemetadata.tools.database import (
+    create_title_index,
     database_exists,
     dataset_downward_size,
     download_and_convert,
+    title_index_exists,
 )
 from modestmoviemetadata.tools.filetools import program_appdata_directory
 from modestmoviemetadata.tools.logtools import get_logger
@@ -45,6 +50,15 @@ from modestmoviemetadata.ui.selectrecord import SelectRecord
 logger = get_logger()
 
 
+class PendingOperation(Flag):
+    TITLE_SEARCH = auto()
+    IMDB_ID_SEARCH = auto()
+    INFORM_DATASET_CONVERTED = auto()
+
+
+IMDB_YEAR_MIN = 1894
+
+
 class MainWindow(QMainWindow):
     def __init__(
         self,
@@ -65,8 +79,8 @@ class MainWindow(QMainWindow):
 
         self.folderIconLabel = QLabel()
 
-        self.lookup_after_dataset_refresh_needed = False
-        self.inform_dataset_downloaded = False
+        # Initialize pending operation flag to no flag
+        self.pending_operation = PendingOperation(0)
 
         pixmap = QPixmap(video_folder_path())
         self.folderIconLabel.setPixmap(pixmap)
@@ -80,7 +94,8 @@ class MainWindow(QMainWindow):
         self.titleLabel.setBuddy(self.titleEdit)
 
         self.yearSpinbox = NarrowSpinbox()
-        self.yearSpinbox.setRange(1894, 2080)
+        self.yearSpinbox.setRange(IMDB_YEAR_MIN - 1, 2100)
+        self.yearSpinbox.setSpecialValueText("")
         self.yearSpinbox.clear()
         self.yearLabel = QLabel("&Year")
         self.yearLabel.setBuddy(self.yearSpinbox)
@@ -182,9 +197,9 @@ class MainWindow(QMainWindow):
         self.copyButton.setToolTip("Copy the Jellyfin folder name to the clipboard")
 
         self.getButton = self.buttonBox.button(QDialogButtonBox.StandardButton.Open)
-        self.getButton.setText("&Generate")
+        self.getButton.setText("&Get")
         self.getButton.clicked.connect(self.getButtonClicked)
-        self.getButton.setToolTip("Generate the Jellyfin folder name")
+        self.getButton.setToolTip("Get the Jellyfin folder name")
 
         self.downloadButton = self.buttonBox.addButton(
             QDialogButtonBox.StandardButton.Reset
@@ -306,17 +321,19 @@ class MainWindow(QMainWindow):
                 self, "IMDb Database", "You already have the most recent database."
             )
         elif data:
-            self.inform_dataset_downloaded = True
+            # Set flag to indicate the dataset has been converted
+            self.pending_operation |= PendingOperation.INFORM_DATASET_CONVERTED
             self.settings.setValue("Last_Modified", data)
 
     @Slot()
     def downloadComplete(self) -> None:
-        if self.inform_dataset_downloaded:
+        if PendingOperation.INFORM_DATASET_CONVERTED in self.pending_operation:
             self.playSound("choh.mp3")
-            self.inform_dataset_downloaded = False
+            # Remove the flag
+            self.pending_operation &= ~PendingOperation.INFORM_DATASET_CONVERTED
 
         self.progressDialog.reset()
-        if self.lookup_after_dataset_refresh_needed:
+        if PendingOperation.IMDB_ID_SEARCH in self.pending_operation:
             QTimer.singleShot(0, self.getButton.clicked.emit)
 
     @Slot()
@@ -325,21 +342,109 @@ class MainWindow(QMainWindow):
         logger.error("%s", exception)
         QMessageBox.critical(self, "Error updating dataset", str(exception))
 
+    def searchByTitle(self) -> bool:
+        if PendingOperation.TITLE_SEARCH in self.pending_operation:
+            logger.debug(
+                "Searching by title because Title Search pending operation set"
+            )
+            return True
+
+        if not title_index_exists():
+            key = "Title_Index_Message"
+            if not self.settings.value(key, ""):
+                logger.debug("Prompting whether to add primary title index")
+                msgBox = QMessageBox(parent=self)
+                msgBox.setWindowTitle("Database Optimization")
+                msgBox.setText(
+                    "Searching by title requires this program's database to be "
+                    "optimized to make that search more efficient. Optimizing it may "
+                    "take a few minutes.\n\n"
+                    "Do you agree?\n"
+                )
+                msgBox.setIcon(QMessageBox.Icon.Question)
+                msgBox.setStandardButtons(
+                    QMessageBox.StandardButton.Yes
+                    | QMessageBox.StandardButton.No
+                    | QMessageBox.StandardButton.Cancel
+                )
+                cb = QCheckBox("Don't show this again")
+                msgBox.setCheckBox(cb)
+                ret = msgBox.exec()
+                if cb.isChecked():
+                    # This value can be set to anything; the value merely has to exist
+                    self.settings.setValue(key, "do not show")
+                if ret == QMessageBox.StandardButton.Cancel:
+                    logger.debug("User cancelled index creation")
+                    return False
+                if ret == QMessageBox.StandardButton.Yes:
+                    self.progressDialog = QProgressDialog(
+                        "Optimizing Database...", None, 0, 0, self
+                    )
+                    self.progressDialog.setMinimumDuration(0)
+                    self.progressDialog.setValue(0)
+                    self.progressDialog.setWindowModality(Qt.WindowModality.WindowModal)
+                    self.progressDialog.setAutoReset(False)
+
+                    worker = Worker(create_title_index)
+                    worker.signals.finished.connect(self.titleIndexCreationFinished)
+                    worker.signals.error.connect(self.titleIndexCreationException)
+                    # Set the flag to indicate a title search needs to be done
+                    # after the index is created
+                    self.pending_operation |= PendingOperation.TITLE_SEARCH
+                    self.threadpool.start(worker)
+                    return False
+
+        self.pending_operation |= PendingOperation.TITLE_SEARCH
+        return True
+
+    @Slot()
+    def titleIndexCreationFinished(self) -> None:
+        QTimer.singleShot(0, self.getButton.clicked.emit)
+        self.progressDialog.reset()
+
+    @Slot(Exception)
+    def titleIndexCreationException(self, exception: Exception) -> None:
+        logger.error(str(exception))
+        if PendingOperation.TITLE_SEARCH in self.pending_operation:
+            self.pending_operation &= ~PendingOperation.TITLE_SEARCH
+        self.progressDialog.reset()
+
     @Slot(bool)
     def getButtonClicked(self, checked: bool) -> None:
         title = self.titleEdit.text().strip()
-        year = self.yearSpinbox.value() or None
+        year = self.yearSpinbox.value()
+        if year == IMDB_YEAR_MIN - 1:
+            year = None
         imdb_id = self.imdbEdit.text().strip()
 
         if not (title or year or imdb_id):
             return
 
-        if len(imdb_id) < 2:
-            return
+        if not imdb_id and title:
+            if not self.searchByTitle():
+                if PendingOperation.TITLE_SEARCH in self.pending_operation:
+                    logger.debug("Deferring searching by title until index created")
+                else:
+                    logger.debug("Not searching by title")
+                return
 
-        if not imdb_id[2:].isdigit():
-            return
+            searching_for = f"{title} ({year})" if year is not None else title
+            self.progressDialog = QProgressDialog(
+                f"Searching for {searching_for}...", None, 0, 0, self
+            )
+            self.progressDialog.setMinimumDuration(0)
+            self.progressDialog.setValue(0)
+            self.progressDialog.setWindowModality(Qt.WindowModality.WindowModal)
+            self.progressDialog.setAutoReset(False)
 
+        if not title:
+            if len(imdb_id) < 2:
+                return
+
+            if not imdb_id[2:].isdigit():
+                return
+
+        logger.debug("Fetching movie info %s (%s) %s", title, year, imdb_id)
         worker = Worker(fetch_movie_info, title, year, imdb_id)
         worker.signals.result.connect(self.movieInfoExtracted)
         worker.signals.error.connect(self.movieInfoException)
@@ -347,6 +452,12 @@ class MainWindow(QMainWindow):
 
     @Slot(object)
     def movieInfoExtracted(self, movie_infos: list[MovieInfo | None]) -> None:
+
+        if PendingOperation.TITLE_SEARCH in self.pending_operation:
+            self.progressDialog.reset()
+            # Unset the Title Search flag
+            self.pending_operation &= ~PendingOperation.TITLE_SEARCH
+
         movie_info = None
 
         if movie_infos is None:
@@ -362,7 +473,8 @@ class MainWindow(QMainWindow):
             ):
                 # It wasn't
                 self.resetContentsExceptIMDbId()
-                if not self.lookup_after_dataset_refresh_needed:
+                # if there is no pending search operation
+                if (PendingOperation.IMDB_ID_SEARCH & self.pending_operation) == 0:
                     ret = QMessageBox.question(
                         self,
                         "Update local database?",
@@ -371,11 +483,12 @@ class MainWindow(QMainWindow):
                         "IMDb dataset?",
                     )
                     if ret == QMessageBox.StandardButton.Yes:
-                        self.lookup_after_dataset_refresh_needed = True
+                        self.pending_operation |= PendingOperation.IMDB_ID_SEARCH
                         QTimer.singleShot(0, self.downloadButton.clicked.emit)
                 else:
-                    # The dataset was already refreshed — don't prompt again
-                    self.lookup_after_dataset_refresh_needed = False
+                    # The dataset was already refreshed. Don't prompt again.
+                    # Clear the flag
+                    self.pending_operation &= ~PendingOperation.IMDB_ID_SEARCH
 
         elif len(movie_infos) > 1:
             self.playSound("brrr.mp3")
@@ -411,6 +524,10 @@ class MainWindow(QMainWindow):
         logger.debug("Error getting movie information")
         logger.error("%s: %s", exception.__class__.__name__, str(exception))
         self.playSound("error.mp3")
+        if PendingOperation.TITLE_SEARCH in self.pending_operation:
+            self.progressDialog.reset()
+            # Unset the Title Search flag
+            self.pending_operation &= ~PendingOperation.TITLE_SEARCH
 
     @Slot(str)
     def playSound(self, sound: str) -> None:

@@ -1,9 +1,5 @@
-#  SPDX-FileCopyrightText: 2026 Damon Lynch <damonlynch@gmail.com>
+#  SPDX-FileCopyrightText: 2022-2026 Damon Lynch <damonlynch@gmail.com>
 #  SPDX-License-Identifier: GPL-3.0-or-later
-
-# Copyright (c) 2022-2023 Damon Lynch
-# SPDX - License - Identifier: GPL-3.0-or-later
-
 
 import webbrowser
 from typing import Any

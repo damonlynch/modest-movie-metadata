@@ -1,7 +1,6 @@
 #  SPDX-FileCopyrightText: 2026 Damon Lynch <damonlynch@gmail.com>
 #  SPDX-License-Identifier: GPL-3.0-or-later
 
-import os
 import shutil
 import sqlite3
 import tempfile
@@ -150,3 +149,46 @@ def query_by_imdb_id(imdb_id: str) -> tuple[str, int] | None:
         )
         row = c.fetchone()
         return row
+
+
+def query_by_title(title: str) -> list[tuple[str, int, str]]:
+    with closing(sqlite3.connect(imdb_db_path())) as conn:
+        c = conn.cursor()
+        formatted_search = f"%{title}%"
+        # Convert NULL years to 0, which is important when comparing years via
+        # integer comparison
+        c.execute(
+            """
+            SELECT primary_title, IFNULL(premiered, 0), title_id FROM titles 
+            WHERE primary_title LIKE ?
+            """,
+            (formatted_search,),
+        )
+        rows = c.fetchall()
+        return rows
+
+
+def title_index_exists() -> bool:
+    with closing(sqlite3.connect(imdb_db_path())) as conn:
+        c = conn.cursor()
+        c.execute(
+            """
+            SELECT 1 FROM sqlite_master WHERE type = 'index' AND 
+            name = 'ix_titles_primary_title';
+            """,
+        )
+        row = c.fetchone()
+        return row is not None
+
+
+def create_title_index(progress_callback: SignalInstance):
+    logger.debug("Creating title_index")
+    with closing(sqlite3.connect(imdb_db_path())) as conn:
+        c = conn.cursor()
+        c.execute(
+            """
+            CREATE INDEX IF NOT EXISTS ix_titles_primary_title 
+            ON titles(primary_title);
+            """,
+        )
+    logger.debug("title_index created")

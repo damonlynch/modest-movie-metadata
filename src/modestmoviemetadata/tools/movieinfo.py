@@ -5,9 +5,7 @@ import re
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from imdb import Cinemagoer, IMDbError, Movie
-
-from modestmoviemetadata.tools.database import query_by_imdb_id
+from modestmoviemetadata.tools.database import query_by_imdb_id, query_by_title
 
 
 @dataclass
@@ -24,22 +22,12 @@ def get_imdb(text: str) -> str:
     return ""
 
 
-def get_year(movie: Movie.Movie) -> int:
-    try:
-        year = int(movie.get("year"))
-    except (ValueError, TypeError):
-        ic("Incorrect value for movie year", movie.get("title"))
-        year = 0
-    return year
-
-
 def fetch_movie_info(
     title: str,
     year: int | None,
     imdb_id: str,
     progress_callback: Callable[[int], None],
 ) -> list[MovieInfo] | None:
-    ia = Cinemagoer()
 
     if imdb_id:
         data = query_by_imdb_id(imdb_id)
@@ -47,37 +35,28 @@ def fetch_movie_info(
             title, year = data
             return [MovieInfo(title=title, year=year, imdb_id=imdb_id)]
         else:
+            # imdb_id with non-existent values for title and year represents a failed
+            # lookup
             return [MovieInfo(title="", year=None, imdb_id=imdb_id)]
 
     else:
         try:
-            movies = ia.search_movie(title)
-        except IMDbError as inst:
+            movies = query_by_title(title)
+        except Exception as inst:
             ic(inst)
         else:
             if not year:
-                return [
-                    MovieInfo(
-                        title=movie.get("title"),
-                        year=get_year(movie),
-                        imdb_id=movie.getID(),
-                    )
-                    for movie in movies
-                ]
+                return [MovieInfo(*movie) for movie in movies]
             else:
                 return [
-                    MovieInfo(
-                        title=movie.get("title"),
-                        year=get_year(movie),
-                        imdb_id=movie.getID(),
-                    )
+                    MovieInfo(*movie)
                     for movie in movies
-                    if year - 1 <= get_year(movie) <= year + 1
+                    if year - 1 <= movie[1] <= year + 1
                 ]
 
 
 def make_imdb_url(imdb_id: str) -> str:
-    return f"https://www.imdb.com/title/tt{imdb_id}/"
+    return f"https://www.imdb.com/title/{imdb_id}/"
 
 
 def sanitise_title(title: str) -> str:
