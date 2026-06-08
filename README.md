@@ -3,10 +3,8 @@
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 [![uv](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/uv/main/assets/badge/v0.json)](https://github.com/astral-sh/uv)
 
-A very simple tool to generate [Jellyfin](https://jellyfin.org/) folder
-names using data from IMDb. By way of example, for the television show
-[Blackadder](https://www.imdb.com/title/tt0084988/), this tool will
-generate the folder name `Blackadder (1982) [imdbid-tt0084988]`:
+A very simple tool to generate [Jellyfin](https://jellyfin.org/) folder names using data made freely available by IMDb. By way of example, for the television show [Black Adder](https://www.imdb.com/title/tt0084988/), this tool will generate the folder name
+`The Black Adder (1983) [imdbid-tt0084988]`:
 
 ![Program screenshot](.github/modest-movie-metadata.png)
 
@@ -15,35 +13,27 @@ Designed to be as efficient as possible, you use it hands-free:
 1. Monitors the clipboard for IMDb IDs, e.g. within a URL.
 2. Automatically writes generated folder names to the clipboard.
 
-If you prefer, you can enter only the title and year, and attempt to look
-up the IMDB ID using this tool. However, in practice, it is typically easier to
-search for the content on the IMDb website using a web browser, and then simply
-copy the URL to the clipboard.
+If you prefer, you can enter only the title and year, and attempt to look up the IMDB ID using this tool. However, in practice, it is typically easier to search for the content on the IMDb website using a web browser, and then simply copy the URL to the clipboard.
 
 The program does not create or monitor folders on the file system.
 
-Developed with Python 3.12, PySide 6.6, and
-[Cinemagoer](https://github.com/cinemagoer/cinemagoer).
+To function, the program will download a dataset from IMDb, and convert it into a database containing the primary title, the year the title premiered, and the title's IMDb id. At the time of writing, the dataset has over twelve million titles. You can make the program update the database should that be necessary. If an IMDb id is not recognized, the program itself will prompt to update the database.
+
 Tested under Windows 10 and 11.
 
 This project is not affiliated with Jellyfin or IMDb.
 
 ## Installation
 
-To install the program on Windows, click on the
-[Releases link here in GitHub](https://github.com/damonlynch/modest-movie-metadata/releases),
-and download the installer for the latest version.
+To install the program on Windows, click on the [Releases link here in GitHub](https://github.com/damonlynch/modest-movie-metadata/releases), and download the installer for the latest version.
 
-The installer is only for 64-bit Windows 10 and 11. It should work equally
-well on Linux and macOS, but to use it you need to know how to install Python
-packages and run a Python script. If somebody would like to volunteer to
-produce a macOS installer, I would be delighted (I don't own a Mac myself).
-If there is demand, I can create a Linux installer.  
+The installer is only for 64-bit Windows 10 and 11. It should work equally well on Linux and macOS, but to use it you need to know how to install Python packages and run a Python script. If somebody would like to volunteer to produce a macOS installer, I would be delighted (I don't own a Mac myself).
+If there is demand, I can create a Linux installer.
 
-For developers, you can install using uv. If you don't already have uv
-installed, use [astral's uv installation
-guide](https://docs.astral.sh/uv/getting-started/installation/). Once uv is installed, simply run `ModestMovieMetadata.ps1` or run `uv sync` to
-set up the project.
+For developers, you can install using uv. If you don't already have uv installed, use [astral's uv installation
+guide](https://docs.astral.sh/uv/getting-started/installation/). Once uv is installed, simply run
+`ModestMovieMetadata.ps1` or run
+`uv sync` to set up the project.
 
 ## License
 
