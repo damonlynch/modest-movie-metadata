@@ -10,16 +10,23 @@ authors = [{ name = "Damon Lynch", email = "damonlynch@gmail.com" }]
 description = "Generate Jellyfin folder names using data from IMDb"
 requires-python = ">=3.11"
 license = { text = "GPL-3.0-or-later" }
-dependencies = ["QtPy >= 2.4.1", "PySide6 >= 6.6.0", "cinemagoer"]
+dependencies = [
+    "QtPy >= 2.4.1",
+    "PySide6 >= 6.11.1",
+    "pyside6-addons>=6.11.1",
+    "pre-commit>=4.6.0",
+    "requests>=2.34.2",
+    "ruff>=0.15.16",
+]
 classifiers = [
-  "Programming Language :: Python :: 3.11",
-  "Programming Language :: Python :: 3.12",
-  "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
-  "Operating System :: Microsoft :: Windows :: Windows 10",
-  "Operating System :: Microsoft :: Windows :: Windows 11",
-  "Development Status :: 4 - Beta",
-  "Topic :: Utilities",
-  "Typing :: Typed",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
+    "Operating System :: Microsoft :: Windows :: Windows 10",
+    "Operating System :: Microsoft :: Windows :: Windows 11",
+    "Development Status :: 4 - Beta",
+    "Topic :: Utilities",
+    "Typing :: Typed",
 ]
 
 
@@ -40,21 +47,21 @@ builtins = ["ic"]
 
 [tool.ruff.lint]
 select = [
-  # pycodestyle
-  "E",
-  # Pyflakes
-  "F",
-  # pyupgrade
-  "UP",
-  # flake8-simplify
-  "SIM",
-  # isort
-  "I",
+    # pycodestyle
+    "E",
+    # Pyflakes
+    "F",
+    # pyupgrade
+    "UP",
+    # flake8-simplify
+    "SIM",
+    # isort
+    "I",
 ]
 extend-select = [
-  "E501",
-  "UP",   # pyupgrade
+    "E501",
+    "UP", # pyupgrade
 ]
 
 [dependency-groups]
-dev = ["pre-commit>=4.2.0", "ruff>=0.11.5"]
+dev = ["pre-commit", "ruff"]
