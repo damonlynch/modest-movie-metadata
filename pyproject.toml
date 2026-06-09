@@ -1,13 +1,13 @@
 [build-system]
-requires = ["setuptools>=46.4.0", "wheel"]
-build-backend = "setuptools.build_meta"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
 [project]
 name = "modestmoviemetadata"
 dynamic = ["version"]
 readme = "README.md"
 authors = [{ name = "Damon Lynch", email = "damonlynch@gmail.com" }]
-description = "Generate Jellyfin folder names using data from IMDb"
+description = "A very simple tool to generate Jellyfin folder names"
 requires-python = ">=3.11"
 license = { text = "GPL-3.0-or-later" }
 dependencies = [
@@ -37,8 +37,6 @@ classifiers = [
 [project.gui-scripts]
 modestmoviemetadata = "modestmoviemetadata.modestmoviemetadata:main"
 
-[tool.setuptools.packages.find]
-where = ["src"]
 
 [tool.ruff]
 line-length = 88
@@ -63,5 +61,26 @@ extend-select = [
     "UP", # pyupgrade
 ]
 
+
+[tool.hatch]
 [dependency-groups]
 dev = ["pre-commit", "ruff"]
+
+[tool.hatch.version]
+path = "src/modestmoviemetadata/__init__.py"
+
+[tool.hatch.envs.default]
+dependencies = [
+    "pyinstaller", "pyinstaller-versionfile"
+]
+
+[tool.hatch.envs.default.scripts]
+#build-version-file = "python -c \"import ast, subprocess, re; content = open('src/modestmoviemetadata/__init__.py').read(); node = next(n for n in ast.parse(content).body if isinstance(n, ast.Assign) and any(t.id == '__version__' for t in n.targets)); raw_version = ast.literal_eval(node.value); clean_version = re.match(r'^\\d+(\\.\\d+){{0,3}}', raw_version).group(0); parts = clean_version.split('.'); parts += ['0'] * (4 - len(parts)); win_version = '.'.join(parts[:4]); subprocess.run(['pyivf-make_version', '--source-format', 'yaml', '--metadata-source', 'metadata.yml', '--outfile', 'version_info.txt', '--version', win_version], check=True)\""
+build-version-file = "python tools/build_version_file.py"
+build-exe = "pyinstaller -y modestmoviemetadata.spec"
+clean = "python -c \"import shutil, os; shutil.rmtree('build', ignore_errors=True)\""
+build = [
+    "build-version-file",
+    "build-exe",
+    "clean"
+]
