@@ -14,6 +14,8 @@ copyright_message = "Copyright &copy; 2024-2026 Damon Lynch."
 
 try:
     version = importlib.metadata.version("modestmoviemetadata")
+    if version == "0.0.0":
+        version = __version__
 except importlib.metadata.PackageNotFoundError:
     version = __version__
 
