@@ -1,10 +1,13 @@
 #  SPDX-FileCopyrightText: 2022-2026 Damon Lynch <damonlynch@gmail.com>
 #  SPDX-License-Identifier: GPL-3.0-or-later
 
+from datetime import datetime
 from enum import Flag, auto
+from typing import cast
 
+import arrow
 from qtpy.QtCore import QObject, QSettings, QSize, Qt, QThreadPool, QTimer, Slot
-from qtpy.QtGui import QGuiApplication, QIcon, QPixmap
+from qtpy.QtGui import QFont, QGuiApplication, QIcon, QPixmap
 from qtpy.QtWidgets import (
     QCheckBox,
     QDialogButtonBox,
@@ -113,6 +116,19 @@ class MainWindow(QMainWindow):
                 """
             )
 
+        self.lastUpdatedLabel = QLabel()
+        self.lastUpdatedLabel.setContentsMargins(4, 18, 0, 0)
+        font = QFont()
+        font.setItalic(True)
+        self.lastUpdatedLabel.setFont(font)
+        self.showLastUpdated()
+
+        self.lastUpdatedTimer = QTimer()
+        # Update last updated every 60 minutes
+        self.lastUpdatedTimer.setInterval(60 * 60 * 1000)
+        self.lastUpdatedTimer.timeout.connect(self.showLastUpdated)
+        self.lastUpdatedTimer.start()
+
         self.titleEdit.textEdited.connect(self.titleEditTextEdited)
         self.titleEdit.pasted.connect(self.titleEditPasted)
         self.yearSpinbox.valueChanged.connect(self.yearSpinboxValueChanged)
@@ -147,6 +163,7 @@ class MainWindow(QMainWindow):
         gridLayout.addWidget(self.yearSpinbox, 1, 1)
         gridLayout.addWidget(self.imdbLabel, 2, 0)
         gridLayout.addWidget(self.imdbEdit, 3, 0, 1, 2)
+        gridLayout.addWidget(self.lastUpdatedLabel, 4, 0, 1, 2)
         gridLayout.setSpacing(6)
 
         layout = QVBoxLayout()
@@ -333,6 +350,7 @@ class MainWindow(QMainWindow):
             self.pending_operation &= ~PendingOperation.INFORM_DATASET_CONVERTED
 
         self.progressDialog.reset()
+        self.showLastUpdated()
         if PendingOperation.IMDB_ID_SEARCH in self.pending_operation:
             QTimer.singleShot(0, self.getButton.clicked.emit)
 
@@ -341,6 +359,25 @@ class MainWindow(QMainWindow):
         logger.error("Error updating dataset")
         logger.error("%s", exception)
         QMessageBox.critical(self, "Error updating dataset", str(exception))
+
+    @Slot()
+    def showLastUpdated(self) -> None:
+        last_modified = cast(str, self.settings.value("Last_Modified", ""))
+        if not last_modified:
+            self.lastUpdatedLabel.setText("")
+        else:
+            try:
+                last_modified_dt = datetime.fromisoformat(last_modified)
+            except ValueError:
+                logger.error(
+                    "Invalid Last Modified ISO date time value %s", last_modified
+                )
+                self.lastUpdatedLabel.setText("")
+            else:
+                last_modified = arrow.get(last_modified_dt).humanize()
+                self.lastUpdatedLabel.setText(
+                    f"Using IMDb dataset from {last_modified}"
+                )
 
     def searchByTitle(self) -> bool:
         if PendingOperation.TITLE_SEARCH in self.pending_operation:
@@ -519,7 +556,7 @@ class MainWindow(QMainWindow):
             self.imdbEdit.setText(text)
             self.imdbEdit.blockSignals(state)
 
-    @Slot()
+    @Slot(Exception)
     def movieInfoException(self, exception: Exception) -> None:
         logger.debug("Error getting movie information")
         logger.error("%s: %s", exception.__class__.__name__, str(exception))
@@ -542,16 +579,26 @@ class MainWindow(QMainWindow):
     @Slot(object)
     def datasetRequiredSize(self, data: object) -> None:
         size = int(data)
-        if size:
-            ret = QMessageBox.question(
-                self,
-                "Database Required",
-                "To continue this program will download from IMDb a publicly "
-                f"available {format_bytes(size)} dataset.\n\n"
-                "The dataset will then be converted into a database about 1 GB in "
-                "size, which may take a few minutes. "
-                "Without this database, the program is unable to function.\n\n"
-                "Do you want this program to proceed with the download and conversion?",
-            )
-            if ret == QMessageBox.StandardButton.No:
-                self.close()
+        s = f"{format_bytes(size)} " if size > 0 else ""
+
+        ret = QMessageBox.question(
+            self,
+            "Database Required",
+            "To continue this program will download from IMDb a publicly "
+            f"available {s}dataset.\n\n"
+            "The dataset will then be converted into a database about 1 GB in "
+            "size, which may take a few minutes. "
+            "Without this database, the program is unable to function.\n\n"
+            "Do you want this program to proceed with the download and conversion?",
+        )
+        if ret == QMessageBox.StandardButton.No:
+            self.close()
+        QTimer.singleShot(0, self.downloadButton.clicked.emit)
+
+    @Slot(Exception)
+    def datasetRequiredException(self, exception: Exception) -> None:
+        logger.debug("Error getting dataset size")
+        logger.error("%s: %s", exception.__class__.__name__, str(exception))
+        if not database_exists():
+            # Allow for Internet connection problems: prompt again
+            self.datasetRequiredSize(0)
