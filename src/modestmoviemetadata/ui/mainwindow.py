@@ -378,7 +378,7 @@ class MainWindow(QMainWindow):
             else:
                 last_modified = arrow.get(last_modified_dt).humanize()
                 self.lastUpdatedLabel.setText(
-                    f"Using IMDb dataset from {last_modified}"
+                    f"Using IMDb's dataset released {last_modified}"
                 )
 
     def searchByTitle(self) -> bool:
