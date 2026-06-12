@@ -549,7 +549,7 @@ class MainWindow(QMainWindow):
             self.yearSpinbox.blockSignals(state)
 
         if not self.imdbEdit.text():
-            text = f"tt{movieInfo.imdb_id}"
+            text = movieInfo.imdb_id
             state = self.imdbEdit.blockSignals(True)
             self.imdbEdit.setText(text)
             self.imdbEdit.blockSignals(state)
