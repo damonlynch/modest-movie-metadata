@@ -359,6 +359,8 @@ class MainWindow(QMainWindow):
         logger.error("Error updating dataset")
         logger.error("%s", exception)
         QMessageBox.critical(self, "Error updating dataset", str(exception))
+        if not database_exists():
+            QTimer.singleShot(0, self.datasetRequired)
 
     @Slot()
     def showLastUpdated(self) -> None:
