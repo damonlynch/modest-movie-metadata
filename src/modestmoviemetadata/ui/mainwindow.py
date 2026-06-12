@@ -505,11 +505,7 @@ class MainWindow(QMainWindow):
         if len(movie_infos) == 1:
             movie_info = movie_infos[0]
             # Was the information found in the local database using the IMDb id?
-            if (
-                movie_info.title == ""
-                and movie_info.year is None
-                and movie_info.imdb_id
-            ):
+            if not movie_info.title and movie_info.year is None and movie_info.imdb_id:
                 # It wasn't
                 self.resetContentsExceptIMDbId()
                 # if there is no pending search operation
