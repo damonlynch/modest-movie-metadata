@@ -1,25 +1,33 @@
 [build-system]
-requires = ["setuptools>=46.4.0", "wheel"]
-build-backend = "setuptools.build_meta"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
 [project]
 name = "modestmoviemetadata"
 dynamic = ["version"]
 readme = "README.md"
 authors = [{ name = "Damon Lynch", email = "damonlynch@gmail.com" }]
-description = "Generate Jellyfin folder names using data from IMDb"
+description = "A very simple tool to generate Jellyfin folder names"
 requires-python = ">=3.11"
 license = { text = "GPL-3.0-or-later" }
-dependencies = ["QtPy >= 2.4.1", "PySide6 >= 6.6.0", "cinemagoer"]
+dependencies = [
+    "arrow",
+    "qtpy >= 2.4.1",
+    "PySide6 >= 6.11.1",
+    "pyside6-addons>=6.11.1",
+    "pre-commit>=4.6.0",
+    "requests>=2.34.2",
+    "ruff>=0.15.16",
+]
 classifiers = [
-  "Programming Language :: Python :: 3.11",
-  "Programming Language :: Python :: 3.12",
-  "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
-  "Operating System :: Microsoft :: Windows :: Windows 10",
-  "Operating System :: Microsoft :: Windows :: Windows 11",
-  "Development Status :: 4 - Beta",
-  "Topic :: Utilities",
-  "Typing :: Typed",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
+    "Operating System :: Microsoft :: Windows :: Windows 10",
+    "Operating System :: Microsoft :: Windows :: Windows 11",
+    "Development Status :: 4 - Beta",
+    "Topic :: Utilities",
+    "Typing :: Typed",
 ]
 
 
@@ -30,8 +38,6 @@ classifiers = [
 [project.gui-scripts]
 modestmoviemetadata = "modestmoviemetadata.modestmoviemetadata:main"
 
-[tool.setuptools.packages.find]
-where = ["src"]
 
 [tool.ruff]
 line-length = 88
@@ -40,21 +46,50 @@ builtins = ["ic"]
 
 [tool.ruff.lint]
 select = [
-  # pycodestyle
-  "E",
-  # Pyflakes
-  "F",
-  # pyupgrade
-  "UP",
-  # flake8-simplify
-  "SIM",
-  # isort
-  "I",
+    # pycodestyle
+    "E",
+    # Pyflakes
+    "F",
+    # pyupgrade
+    "UP",
+    # flake8-simplify
+    "SIM",
+    # isort
+    "I",
 ]
 extend-select = [
-  "E501",
-  "UP",   # pyupgrade
+    "E501",
+    "UP", # pyupgrade
 ]
 
+
+[tool.hatch]
 [dependency-groups]
-dev = ["pre-commit>=4.2.0", "ruff>=0.11.5"]
+dev = ["pre-commit", "ruff"]
+
+[tool.hatch.version]
+path = "src/modestmoviemetadata/__init__.py"
+
+[tool.hatch.envs.default]
+dependencies = [
+    "pyinstaller", "pyinstaller-versionfile"
+]
+
+[tool.hatch.envs.default.scripts]
+build-version-file = "python tools/build_version_file.py"
+build-exe = "pyinstaller -y modestmoviemetadata.spec"
+build-iss = "python tools/build_iss.py"
+build-installer = """
+where.exe ISCC.exe >nul 2>&1 && (ISCC.exe .\\modestmoviemetadata.iss) || \
+cmd /c if exist "%ProgramFiles%\\Inno Setup 6\\ISCC.exe" ("%ProgramFiles%\\Inno Setup 6\\ISCC.exe" .\\modestmoviemetadata.iss) || \
+cmd /c if exist "%ProgramFiles(x86)%\\Inno Setup 6\\ISCC.exe" ("%ProgramFiles(x86)%\\Inno Setup 6\\ISCC.exe" .\\modestmoviemetadata.iss) || \
+echo WARNING: Skipping installer build. ISCC.exe not found on PATH or default locations.
+"""
+clean = "python -c \"import shutil, os; shutil.rmtree('build', ignore_errors=True)\""
+build = [
+    "build-version-file",
+    "build-exe",
+    "build-iss",
+    "build-installer",
+    "clean"
+]

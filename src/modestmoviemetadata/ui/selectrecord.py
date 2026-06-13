@@ -1,9 +1,5 @@
-#  SPDX-FileCopyrightText: 2026 Damon Lynch <damonlynch@gmail.com>
+#  SPDX-FileCopyrightText: 2022-2026 Damon Lynch <damonlynch@gmail.com>
 #  SPDX-License-Identifier: GPL-3.0-or-later
-
-# Copyright (c) 2022-2023 Damon Lynch
-# SPDX - License - Identifier: GPL-3.0-or-later
-
 
 import webbrowser
 from typing import Any
@@ -27,7 +23,7 @@ from qtpy.QtWidgets import (
     QVBoxLayout,
 )
 
-from ..tools.movieinfo import MovieInfo, make_imdb_url
+from modestmoviemetadata.tools.movieinfo import MovieInfo, make_imdb_url
 
 
 class SelectRecord(QDialog):

@@ -6,7 +6,7 @@
       <excludeFolder url="file://$MODULE_DIR$/.venv" />
       <excludeFolder url="file://$MODULE_DIR$/venv" />
     </content>
-    <orderEntry type="jdk" jdkName="uv (modest-movie-metadata)" jdkType="Python SDK" />
+    <orderEntry type="jdk" jdkName="Hatch (modestmoviemetadata) [3.14]" jdkType="Python SDK" />
     <orderEntry type="sourceFolder" forTests="false" />
   </component>
 </module>
