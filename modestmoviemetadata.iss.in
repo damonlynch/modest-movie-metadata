@@ -1,0 +1,78 @@
+[Setup]
+; Unique ID for your new Inno Setup installer. 
+; (Click "Tools" > "Generate GUID" inside Inno Setup to make your own)
+AppId={{9025E301-E455-4BD6-A8A1-9631041B3CE2}
+AppName=Modest Movie Metadata
+AppVersion=@APPVERSION@
+AppPublisher=Damon Lynch
+DefaultDirName={autopf}\Modest Movie Metadata
+DefaultGroupName=Modest Movie Metadata
+; Native process termination. It detects your app via Windows Restart Manager
+; and safely closes it before changing files. No taskkill scripting needed.
+CloseApplications=force
+RestartApplications=yes
+OutputDir=.\dist
+OutputBaseFilename=ModestMovieMetadata
+Compression=lzma
+SolidCompression=yes
+ArchitecturesInstallIn64BitMode=x64compatible
+; Include the license file sitting in the same folder
+LicenseFile=gpl-3.0.txt
+
+[Languages]
+Name: "english"; MessagesFile: "compiler:Default.isl"
+
+[Files]
+; Update these paths to point to your compiled app files on your PC
+Source: "{#SourcePath}\dist\ModestMovieMetadata\ModestMovieMetadata.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#SourcePath}\dist\ModestMovieMetadata\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+
+[Icons]
+Name: "{group}\Modest Movie Metadata"; Filename: "{app}\Modest Movie Metadata.exe"
+Name: "{autodesktop}\Modest Movie Metadata"; Filename: "{app}\Modest Movie Metadata.exe"; Tasks: desktopicon
+
+[Tasks]
+Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
+
+[Code]
+// =========================================================================
+// PASCAL ENGINE: UPGRADE ROUTINE WITH FUTURE-PROOF INNO DETECTION
+// =========================================================================
+function InitializeSetup(): Boolean;
+var
+  UninstallKey: String;
+  UninstallString: String;
+  IsInnoInstall: String;
+  ResultCode: Integer;
+begin
+  Result := True;
+  UninstallKey := 'SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\Modest Movie Metadata';
+
+  // Check if an existing application registry entry exists
+  if RegQueryStringValue(HKLM, UninstallKey, 'UninstallString', UninstallString) then
+  begin
+    // FUTURE PROOFING: If it has this value, it's already an Inno Setup generation
+    if RegQueryStringValue(HKLM, UninstallKey, 'Inno Setup: Setup Version', IsInnoInstall) then
+    begin
+      // Let Inno Setup run its native over-the-top update process seamlessly
+      Result := True;
+    end
+    else
+    begin
+      // It is the legacy InstallForge build. Process the silent clean routine.
+      UninstallString := RemoveQuotes(UninstallString);
+      if FileExists(UninstallString) then
+      begin
+        // Runs quietly without popping up interface questions to the user
+        if Exec(UninstallString, '/SILENT', '', SW_SHOWNORMAL, ewWaitUntilTerminated, ResultCode) then
+        begin
+          Sleep(1200); // Breathe window to ensure old file handles unlock completely
+        end;
+      end;
+    end;
+  end;
+end;
+[Run]
+; Launches the app on the final setup page. 
+; {app} dynamically points to whatever directory the user installed the software to.
+Filename: "{app}\ModestMovieMetadata.exe"; Description: "{cm:LaunchProgram,Modest Movie Metadata}"; Flags: nowait postinstall skipifsilent

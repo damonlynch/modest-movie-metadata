@@ -116,8 +116,8 @@ uv.lock
 #*.spec
 version_info.txt
 
-# InstallForge
-*.ifp
+# Inno Setup
+*.iss
 
 # Installer logs
 pip-log.txt

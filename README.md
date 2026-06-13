@@ -27,16 +27,18 @@ Tested under Windows 10 and 11. This project is not affiliated with Jellyfin or 
 
 ## Installation
 
-To install the program on Windows, click on the [Releases link here in GitHub](https://github.com/damonlynch/modest-movie-metadata/releases), and download the installer for the latest version.
+To install the program on Windows, click on the [Releases link here in GitHub](https://github.com/damonlynch/modest-movie-metadata/releases), and download the installer for the latest version. The installer is only for 64-bit Windows 10 and 11. Installers for version 2 and newer should prompt to remove the previous version before installing the new version.
 
-The installer is only for 64-bit Windows 10 and 11. It should work equally well on Linux and macOS, but to use it you need to know how to install Python packages and run a Python script. If somebody would like to volunteer to produce a macOS installer, I would be delighted (I don't own a Mac myself).
+Modest Movie Metadata should work equally well on Linux and macOS, but to use it you need to know how to install Python packages and run a Python script. If somebody would like to volunteer to produce a macOS installer, I would be delighted (I don't own a Mac myself).
 
 ## Build
 
-[PyInstaller](https://pyinstaller.org/en/stable/) is used to create the Windows executable.
+[PyInstaller](https://pyinstaller.org/en/stable/) is used to create the Windows executable, and [Inno Setup](https://jrsoftware.org/isinfo.php) is used to create the Windows installer.
 
 1. Install [Hatch](https://hatch.pypa.io/latest/)
 2. Run `hatch run build`
+
+Tested with Inno Setup  6.7.3.
 
 ## License
 
