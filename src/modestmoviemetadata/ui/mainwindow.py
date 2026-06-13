@@ -221,7 +221,7 @@ class MainWindow(QMainWindow):
         self.downloadButton = self.buttonBox.addButton(
             QDialogButtonBox.StandardButton.Reset
         )
-        self.downloadButton.setText("&Update Database")
+        self.downloadButton.setText("&Update Dataset")
         self.downloadButton.clicked.connect(self.downloadButtonClicked)
         self.downloadButton.setToolTip(
             "Update local database using the latest IMDb  dataset"
@@ -335,7 +335,9 @@ class MainWindow(QMainWindow):
     def downloadResult(self, data: str) -> None:
         if data == "ALREADY_DOWNLOADED":
             QMessageBox.information(
-                self, "IMDb Database", "You already have the most recent database."
+                self,
+                "IMDb Dataset",
+                "The most recent dataset has already been downloaded.",
             )
         elif data:
             # Set flag to indicate the dataset has been converted
@@ -395,9 +397,8 @@ class MainWindow(QMainWindow):
                 msgBox = QMessageBox(parent=self)
                 msgBox.setWindowTitle("Database Optimization")
                 msgBox.setText(
-                    "Searching by title requires this program's database to be "
-                    "optimized to make that search more efficient. Optimizing it may "
-                    "take a few minutes.\n\n"
+                    "Searching by title requires additional database optimization to "
+                    "improve speed. This process may take a few minutes.\n\n"
                     "Do you agree?\n"
                 )
                 msgBox.setIcon(QMessageBox.Icon.Question)
