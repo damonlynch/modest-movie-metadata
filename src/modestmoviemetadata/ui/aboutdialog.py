@@ -14,7 +14,9 @@ from qtpy.QtGui import (
     QPen,
     QPixmap,
 )
+from qtpy.QtStateMachine import QFinalState, QHistoryState, QState, QStateMachine
 from qtpy.QtWidgets import (
+    QApplication,
     QDialog,
     QDialogButtonBox,
     QHBoxLayout,
@@ -180,13 +182,14 @@ class AboutDialog(QDialog):
         )
 
         buttonBox = QDialogButtonBox()
-        closeButton = buttonBox.addButton(QDialogButtonBox.StandardButton.Close)
+        self.closeButton = buttonBox.addButton(QDialogButtonBox.StandardButton.Close)
         self.creditsButton = buttonBox.addButton(
             "Credits", QDialogButtonBox.ButtonRole.HelpRole
         )
         self.creditsButton.setDefault(False)
         self.creditsButton.setCheckable(True)
-        closeButton.setDefault(True)
+        self.closeButton.setDefault(True)
+        self.closeButton.setFocus()
 
         buttonLayout = QVBoxLayout()
         buttonLayout.addWidget(buttonBox)
@@ -202,21 +205,29 @@ class AboutDialog(QDialog):
 
         self.setLayout(mainLayout)
 
-        buttonBox.rejected.connect(self.reject)
-        self.creditsButton.clicked.connect(self.creditsButtonClicked)
+        self.initialState = QState()
+        self.finalState = QFinalState()
 
-        closeButton.setFocus()
+        self.normalState = QState(self.initialState)
+        self.creditsState = QState(self.initialState)
 
-    @Slot()
-    def creditsButtonClicked(self) -> None:
-        self.showStackItem()
+        self.normalState.assignProperty(self.stack, "currentIndex", 0)
+        self.creditsState.assignProperty(self.stack, "currentIndex", 1)
 
-    @Slot()
-    def showStackItem(self) -> None:
-        if self.creditsButton.isChecked():
-            self.stack.setCurrentIndex(1)
-        else:
-            self.stack.setCurrentIndex(0)
+        self.initialState.setInitialState(self.normalState)
+
+        self.normalState.addTransition(self.creditsButton.clicked, self.creditsState)
+        self.creditsState.addTransition(self.creditsButton.clicked, self.normalState)
+
+        self.initialState.addTransition(self.closeButton.clicked, self.finalState)
+
+        self.machine = QStateMachine()
+        self.machine.addState(self.initialState)
+        self.machine.addState(self.finalState)
+        self.machine.setInitialState(self.initialState)
+        self.machine.finished.connect(self.reject)
+
+        self.machine.start()
 
     def setupTitleVersion(self) -> None:
         self.title = application_name
@@ -257,3 +268,10 @@ class AboutDialog(QDialog):
         painter.setFont(self.versionFont)
         painter.drawText(QPointF(self.margin + self.padding, self.version_y), version)
         painter.end()
+
+
+if __name__ == "__main__":
+    app = QApplication([])
+    dialog = AboutDialog()
+    dialog.show()
+    app.exec()
