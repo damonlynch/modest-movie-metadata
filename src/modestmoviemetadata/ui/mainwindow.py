@@ -6,8 +6,9 @@ from enum import Flag, auto
 from typing import cast
 
 import arrow
-from qtpy.QtCore import QObject, QSettings, QSize, Qt, QThreadPool, QTimer, Slot
-from qtpy.QtGui import QFont, QGuiApplication, QIcon, QPixmap
+from qtpy.QtCore import QObject, QSettings, QSize, Qt, QThreadPool, QTimer, Signal, Slot
+from qtpy.QtGui import QCloseEvent, QFont, QGuiApplication, QIcon, QPixmap
+from qtpy.QtStateMachine import QStateMachine
 from qtpy.QtWidgets import (
     QCheckBox,
     QDialogButtonBox,
@@ -49,6 +50,7 @@ from modestmoviemetadata.ui.appthreading import Worker
 from modestmoviemetadata.ui.fancylineedit import FancyLineEdit
 from modestmoviemetadata.ui.narrowspinbox import NarrowSpinbox
 from modestmoviemetadata.ui.selectrecord import SelectRecord
+from modestmoviemetadata.ui.state import FinalState, State
 
 logger = get_logger()
 
@@ -63,6 +65,9 @@ IMDB_YEAR_MIN = 1894
 
 
 class MainWindow(QMainWindow):
+    machineClosing = Signal()
+    machineInitialized = Signal()
+
     def __init__(
         self,
         parent: QObject = None,
@@ -135,7 +140,12 @@ class MainWindow(QMainWindow):
         self.imdbEdit.textEdited.connect(self.imdbEditTextEdited)
         self.imdbEdit.pasted.connect(self.imdbEditPasted)
 
+        self.setupStateMachine()
         self.setupButtonBox()
+        self.setupReset()
+        self.setupUpdate()
+        self.setupCopyToClipboard()
+        self.setupAboutDialog()
 
         folderLayout = QHBoxLayout()
         folderLayout.addWidget(self.folderIconLabel)
@@ -179,6 +189,7 @@ class MainWindow(QMainWindow):
 
         self.resize(QSize(600, 10))
         self.show()
+        QTimer.singleShot(0, self.machineInitialized.emit)
         if program_appdata_directory() is None:
             QMessageBox.critical(
                 self,
@@ -190,6 +201,37 @@ class MainWindow(QMainWindow):
         elif not database_exists():
             QTimer.singleShot(0, self.datasetRequired)
 
+    def closeEvent(self, event: QCloseEvent):
+        self.machineClosing.emit()
+        event.accept()
+
+    def setupStateMachine(self) -> None:
+
+        self.initializingState = State(name="initializingState")
+        self.readyState = State(name="readyState")
+        self.resetState = State(name="resetState")
+        self.updateState = State(name="updateState")
+        self.copyState = State(name="copyState")
+        self.aboutState = State(name="aboutState")
+        self.finalState = FinalState(name="finalState")
+
+        self.initializingState.addTransition(self.machineInitialized, self.readyState)
+        self.readyState.addTransition(self.machineClosing, self.finalState)
+
+        self.machine = QStateMachine()
+        self.machine.addState(self.initializingState)
+        self.machine.addState(self.readyState)
+        self.machine.addState(self.resetState)
+        self.machine.addState(self.updateState)
+        self.machine.addState(self.copyState)
+        self.machine.addState(self.aboutState)
+        self.machine.addState(self.finalState)
+
+        self.machine.setInitialState(self.initializingState)
+        self.machine.finished.connect(self.close)
+
+        self.machine.start()
+
     def setupButtonBox(self) -> None:
         self.buttonBox = QDialogButtonBox(
             QDialogButtonBox.StandardButtons.Apply
@@ -199,7 +241,6 @@ class MainWindow(QMainWindow):
         )
 
         self.aboutButton = self.buttonBox.button(QDialogButtonBox.StandardButton.Help)
-        self.aboutButton.clicked.connect(self.aboutButtonClicked)
         self.aboutButton.setText("About")
         self.aboutButton.setToolTip("Information about the program")
 
@@ -210,7 +251,6 @@ class MainWindow(QMainWindow):
 
         self.copyButton = self.buttonBox.button(QDialogButtonBox.StandardButton.Apply)
         self.copyButton.setText("&Copy")
-        self.copyButton.clicked.connect(self.copyButtonClicked)
         self.copyButton.setToolTip("Copy the Jellyfin folder name to the clipboard")
 
         self.getButton = self.buttonBox.button(QDialogButtonBox.StandardButton.Open)
@@ -226,6 +266,38 @@ class MainWindow(QMainWindow):
         self.downloadButton.setToolTip(
             "Update local database using the latest IMDb  dataset"
         )
+
+    def setupReset(self) -> None:
+        self.resetState.entered.connect(self.titleEdit.clear)
+        self.resetState.entered.connect(self.yearSpinbox.clear)
+        self.resetState.entered.connect(self.imdbEdit.clear)
+        self.resetState.entered.connect(self.folderLabel.clear)
+        self.resetState.addTransition(self.readyState)
+        self.readyState.addTransition(self.resetButton.clicked, self.resetState)
+
+    def setupUpdate(self) -> None:
+        pass
+
+    def setupAboutDialog(self) -> None:
+        self.aboutState.entered.connect(self.showAboutDialog)
+        self.aboutState.addTransition(self.readyState)
+        self.readyState.addTransition(self.aboutButton.clicked, self.aboutState)
+
+    @Slot()
+    def showAboutDialog(self) -> None:
+        aboutDialog = AboutDialog(parent=self)
+        aboutDialog.exec()
+
+    def setupCopyToClipboard(self) -> None:
+        self.copyState.entered.connect(self.copyToClipboard)
+        self.copyState.addTransition(self.readyState)
+        self.readyState.addTransition(self.copyButton.clicked, self.copyState)
+
+    @Slot()
+    def copyToClipboard(self) -> None:
+        text = self.folderLabel.text()
+        if text:
+            self.clipboard.setText(text)
 
     @Slot()
     def clipboardDataChanged(self) -> None:
@@ -278,17 +350,6 @@ class MainWindow(QMainWindow):
         if self.imdbEdit.text():
             text = f"{text} [imdbid-{self.imdbEdit.text()}]"
         self.folderLabel.setText(text)
-
-    @Slot()
-    def aboutButtonClicked(self, checked: bool) -> None:
-        about = AboutDialog(parent=self)
-        about.exec()
-
-    @Slot(bool)
-    def copyButtonClicked(self, checked: bool) -> None:
-        text = self.folderLabel.text()
-        if text:
-            self.clipboard.setText(text)
 
     @Slot(bool)
     def resetButtonClicked(self, checked: bool) -> None:
@@ -592,7 +653,8 @@ class MainWindow(QMainWindow):
         )
         if ret == QMessageBox.StandardButton.No:
             self.close()
-        QTimer.singleShot(0, self.downloadButton.clicked.emit)
+        else:
+            QTimer.singleShot(0, self.downloadButton.clicked.emit)
 
     @Slot(Exception)
     def datasetRequiredException(self, exception: Exception) -> None:

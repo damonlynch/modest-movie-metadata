@@ -14,7 +14,7 @@ from qtpy.QtGui import (
     QPen,
     QPixmap,
 )
-from qtpy.QtStateMachine import QFinalState, QHistoryState, QState, QStateMachine
+from qtpy.QtStateMachine import QStateMachine
 from qtpy.QtWidgets import (
     QApplication,
     QDialog,
@@ -30,6 +30,7 @@ from qtpy.QtWidgets import (
 
 from modestmoviemetadata.config import application_name, copyright_message, version
 from modestmoviemetadata.tools.utilities import data_file_path, pyqt_api
+from modestmoviemetadata.ui.state import FinalState, State
 
 
 class AboutDialog(QDialog):
@@ -205,11 +206,11 @@ class AboutDialog(QDialog):
 
         self.setLayout(mainLayout)
 
-        self.initialState = QState()
-        self.finalState = QFinalState()
+        self.initialState = State(name="aboutInitialState")
+        self.finalState = FinalState(name="aboutFinalState")
 
-        self.normalState = QState(self.initialState)
-        self.creditsState = QState(self.initialState)
+        self.normalState = State(name="aboutNormalState", parent=self.initialState)
+        self.creditsState = State(name="aboutCreditsState", parent=self.initialState)
 
         self.normalState.assignProperty(self.stack, "currentIndex", 0)
         self.creditsState.assignProperty(self.stack, "currentIndex", 1)
