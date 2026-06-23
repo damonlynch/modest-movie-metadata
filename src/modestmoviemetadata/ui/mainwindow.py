@@ -46,7 +46,7 @@ from modestmoviemetadata.tools.utilities import (
 )
 from modestmoviemetadata.tools.viewutils import boxBorderColor
 from modestmoviemetadata.ui.aboutdialog import AboutDialog
-from modestmoviemetadata.ui.appthreading import Worker
+from modestmoviemetadata.ui.appthreading import ProxySignals, Worker
 from modestmoviemetadata.ui.fancylineedit import FancyLineEdit
 from modestmoviemetadata.ui.narrowspinbox import NarrowSpinbox
 from modestmoviemetadata.ui.selectrecord import SelectRecord
@@ -67,12 +67,13 @@ IMDB_YEAR_MIN = 1894
 class MainWindow(QMainWindow):
     machineClosing = Signal()
     machineInitialized = Signal()
+    databaseValid = Signal()
+    databaseInvalid = Signal()
 
     def __init__(
         self,
-        parent: QObject = None,
     ) -> None:
-        super().__init__(parent)
+        super().__init__()
 
         self.setWindowTitle(application_name)
         self.setWindowIcon(QIcon(program_icon_path()))
@@ -81,14 +82,39 @@ class MainWindow(QMainWindow):
 
         self.threadpool = QThreadPool()
         self.threadpool.setMaxThreadCount(1)
+        self.controller = ProxySignals()
 
         self.clipboard = QGuiApplication.clipboard()
         self.clipboard.changed.connect(self.clipboardDataChanged)
 
-        self.folderIconLabel = QLabel()
-
         # Initialize pending operation flag to no flag
         self.pending_operation = PendingOperation(0)
+
+        self.setupWidgets()
+        self.setupStateMachine()
+        self.layoutWidgets()
+
+        self.centralWidget().setEnabled(False)
+        self.show()
+        QTimer.singleShot(0, self.machineInitialized.emit)
+        if program_appdata_directory() is None:
+            QMessageBox.critical(
+                self,
+                "Modest Movie Metadata Critical Error",
+                "The program's Application Data directory cannot be created. "
+                "The program will now exit.",
+            )
+            QTimer.singleShot(0, self.close)
+
+    def closeEvent(self, event: QCloseEvent):
+        self.machineClosing.emit()
+        event.accept()
+
+    def setupWidgets(self) -> None:
+
+        self.mainWidget = QWidget()
+
+        self.folderIconLabel = QLabel()
 
         pixmap = QPixmap(video_folder_path())
         self.folderIconLabel.setPixmap(pixmap)
@@ -126,7 +152,6 @@ class MainWindow(QMainWindow):
         font = QFont()
         font.setItalic(True)
         self.lastUpdatedLabel.setFont(font)
-        self.showLastUpdated()
 
         self.lastUpdatedTimer = QTimer()
         # Update last updated every 60 minutes
@@ -140,13 +165,41 @@ class MainWindow(QMainWindow):
         self.imdbEdit.textEdited.connect(self.imdbEditTextEdited)
         self.imdbEdit.pasted.connect(self.imdbEditPasted)
 
-        self.setupStateMachine()
         self.setupButtonBox()
-        self.setupReset()
-        self.setupUpdate()
-        self.setupCopyToClipboard()
-        self.setupAboutDialog()
 
+    def setupButtonBox(self) -> None:
+        self.buttonBox = QDialogButtonBox(
+            QDialogButtonBox.StandardButtons.Apply
+            | QDialogButtonBox.StandardButtons.Open
+            | QDialogButtonBox.StandardButtons.Reset
+            | QDialogButtonBox.StandardButtons.Help
+        )
+
+        self.aboutButton = self.buttonBox.button(QDialogButtonBox.StandardButton.Help)
+        self.aboutButton.setText("About")
+        self.aboutButton.setToolTip("Information about the program")
+
+        self.resetButton = self.buttonBox.button(QDialogButtonBox.StandardButton.Reset)
+        self.resetButton.clicked.connect(self.resetButtonClicked)
+        self.resetButton.setToolTip("Reset")
+        self.resetButton.setToolTip("Clear the IMDb, Title and Year values")
+
+        self.copyButton = self.buttonBox.button(QDialogButtonBox.StandardButton.Apply)
+        self.copyButton.setText("&Copy")
+        self.copyButton.setToolTip("Copy the Jellyfin folder name to the clipboard")
+
+        self.getButton = self.buttonBox.button(QDialogButtonBox.StandardButton.Open)
+        self.getButton.setText("&Get")
+        self.getButton.clicked.connect(self.getButtonClicked)
+        self.getButton.setToolTip("Get the Jellyfin folder name")
+
+        self.updateButton = self.buttonBox.addButton(
+            QDialogButtonBox.StandardButton.Reset
+        )
+        self.updateButton.setText("&Update Dataset")
+        self.updateButton.setToolTip("Get the latest online IMDb dataset")
+
+    def layoutWidgets(self) -> None:
         folderLayout = QHBoxLayout()
         folderLayout.addWidget(self.folderIconLabel)
         folderLayout.addWidget(self.folderLabel)
@@ -181,46 +234,34 @@ class MainWindow(QMainWindow):
         layout.addWidget(folderWidget, stretch=100)
         layout.addLayout(gridLayout)
         layout.addWidget(self.buttonBox)
+        self.mainWidget.setLayout(layout)
 
-        mainWidget = QWidget()
-        mainWidget.setLayout(layout)
-
-        self.setCentralWidget(mainWidget)
+        self.setCentralWidget(self.mainWidget)
 
         self.resize(QSize(600, 10))
-        self.show()
-        QTimer.singleShot(0, self.machineInitialized.emit)
-        if program_appdata_directory() is None:
-            QMessageBox.critical(
-                self,
-                "Modest Movie Metadata Critical Error",
-                "The program's Application Data directory cannot be created. "
-                "The program will now exit.",
-            )
-            QTimer.singleShot(0, self.close)
-        elif not database_exists():
-            QTimer.singleShot(0, self.datasetRequired)
-
-    def closeEvent(self, event: QCloseEvent):
-        self.machineClosing.emit()
-        event.accept()
 
     def setupStateMachine(self) -> None:
 
         self.initializingState = State(name="initializingState")
+        self.checkDatabaseState = State(name="checkDatabaseState")
+        self.newDatabaseState = State(name="newDatabaseState")
         self.readyState = State(name="readyState")
         self.resetState = State(name="resetState")
+        self.errorState = State(name="errorState")
         self.updateState = State(name="updateState")
         self.copyState = State(name="copyState")
         self.aboutState = State(name="aboutState")
         self.finalState = FinalState(name="finalState")
 
-        self.initializingState.addTransition(self.machineInitialized, self.readyState)
+        self.readyState.assignProperty(self.mainWidget, "enabled", True)
         self.readyState.addTransition(self.machineClosing, self.finalState)
 
         self.machine = QStateMachine()
         self.machine.addState(self.initializingState)
+        self.machine.addState(self.checkDatabaseState)
+        self.machine.addState(self.newDatabaseState)
         self.machine.addState(self.readyState)
+        self.machine.addState(self.errorState)
         self.machine.addState(self.resetState)
         self.machine.addState(self.updateState)
         self.machine.addState(self.copyState)
@@ -230,44 +271,32 @@ class MainWindow(QMainWindow):
         self.machine.setInitialState(self.initializingState)
         self.machine.finished.connect(self.close)
 
+        self.setupDatabaseStates()
+        self.setupResetState()
+        self.setupUpdateState()
+        self.setupCopyToClipboardState()
+        self.setupAboutState()
+
         self.machine.start()
 
-    def setupButtonBox(self) -> None:
-        self.buttonBox = QDialogButtonBox(
-            QDialogButtonBox.StandardButtons.Apply
-            | QDialogButtonBox.StandardButtons.Open
-            | QDialogButtonBox.StandardButtons.Reset
-            | QDialogButtonBox.StandardButtons.Help
+    def setupDatabaseStates(self) -> None:
+        self.initializingState.addTransition(
+            self.machineInitialized, self.checkDatabaseState
+        )
+        self.checkDatabaseState.entered.connect(self.checkDatabase)
+        self.checkDatabaseState.addTransition(self.databaseValid, self.readyState)
+        self.checkDatabaseState.addTransition(
+            self.databaseInvalid, self.newDatabaseState
+        )
+        self.newDatabaseState.entered.connect(self.newDatabase)
+        self.newDatabaseState.addTransition(
+            self.controller.createDataset, self.updateState
+        )
+        self.newDatabaseState.addTransition(
+            self.controller.doNotCreateDataset, self.finalState
         )
 
-        self.aboutButton = self.buttonBox.button(QDialogButtonBox.StandardButton.Help)
-        self.aboutButton.setText("About")
-        self.aboutButton.setToolTip("Information about the program")
-
-        self.resetButton = self.buttonBox.button(QDialogButtonBox.StandardButton.Reset)
-        self.resetButton.clicked.connect(self.resetButtonClicked)
-        self.resetButton.setToolTip("Reset")
-        self.resetButton.setToolTip("Clear the IMDb, Title and Year values")
-
-        self.copyButton = self.buttonBox.button(QDialogButtonBox.StandardButton.Apply)
-        self.copyButton.setText("&Copy")
-        self.copyButton.setToolTip("Copy the Jellyfin folder name to the clipboard")
-
-        self.getButton = self.buttonBox.button(QDialogButtonBox.StandardButton.Open)
-        self.getButton.setText("&Get")
-        self.getButton.clicked.connect(self.getButtonClicked)
-        self.getButton.setToolTip("Get the Jellyfin folder name")
-
-        self.downloadButton = self.buttonBox.addButton(
-            QDialogButtonBox.StandardButton.Reset
-        )
-        self.downloadButton.setText("&Update Dataset")
-        self.downloadButton.clicked.connect(self.downloadButtonClicked)
-        self.downloadButton.setToolTip(
-            "Update local database using the latest IMDb  dataset"
-        )
-
-    def setupReset(self) -> None:
+    def setupResetState(self) -> None:
         self.resetState.entered.connect(self.titleEdit.clear)
         self.resetState.entered.connect(self.yearSpinbox.clear)
         self.resetState.entered.connect(self.imdbEdit.clear)
@@ -275,10 +304,71 @@ class MainWindow(QMainWindow):
         self.resetState.addTransition(self.readyState)
         self.readyState.addTransition(self.resetButton.clicked, self.resetState)
 
-    def setupUpdate(self) -> None:
-        pass
+    def setupUpdateState(self) -> None:
+        self.updateState.entered.connect(self.updateDataset)
 
-    def setupAboutDialog(self) -> None:
+        self.updateState.addTransition(self.controller.updateFinished, self.readyState)
+        self.updateState.addTransition(self.controller.updateError, self.errorState)
+        self.readyState.addTransition(self.updateButton.clicked, self.updateState)
+
+    @Slot()
+    def updateDataset(self) -> None:
+        logger.debug("showing progress dialog")
+        self.progressDialog = QProgressDialog(
+            "Checking IMDb dataset...", None, 0, 0, self
+        )
+        self.progressDialog.setMinimumDuration(0)
+        self.progressDialog.setValue(0)
+        self.progressDialog.setWindowModality(Qt.WindowModality.WindowModal)
+        self.progressDialog.setAutoReset(False)
+
+        worker = Worker(download_and_convert, self.settings.value("Last_Modified", ""))
+        worker.signals.result.connect(self.updateResult)
+        worker.signals.finished.connect(self.updateComplete)
+        worker.signals.progress.connect(self.updateProgress)
+        worker.signals.error.connect(self.updateError)
+        self.threadpool.start(worker)
+
+    @Slot(tuple)
+    def updateProgress(self, data: tuple) -> None:
+        text, progress, maximum = data
+        if text and text != self.progressDialog.labelText():
+            self.progressDialog.setLabelText(text)
+        if maximum >= 0:
+            self.progressDialog.setMaximum(maximum)
+        self.progressDialog.setValue(progress)
+
+    @Slot(object)
+    def updateResult(self, data: str) -> None:
+        if data == "ALREADY_DOWNLOADED":
+            QMessageBox.information(
+                self,
+                "IMDb Dataset",
+                "The most recent dataset has already been downloaded.",
+            )
+        elif data:
+            # Set flag to indicate the dataset has been converted
+            self.pending_operation |= PendingOperation.INFORM_DATASET_CONVERTED
+            self.settings.setValue("Last_Modified", data)
+
+    @Slot()
+    def updateComplete(self) -> None:
+        logger.debug("closing progress dialog")
+        self.progressDialog.reset()
+        # TODO Consider making a state out of this function
+        self.showLastUpdated()
+        self.controller.updateFinished.emit()
+        # TODO do a search if one is pending
+
+    @Slot()
+    def updateError(self, exception: Exception) -> None:
+        logger.error("Error updating dataset")
+        logger.error("%s", exception)
+        QMessageBox.critical(self, "Error updating dataset", str(exception))
+        # TODO reset the progress window, perhaps by using a state
+        self.controller.updateError.emit()
+
+    def setupAboutState(self) -> None:
         self.aboutState.entered.connect(self.showAboutDialog)
         self.aboutState.addTransition(self.readyState)
         self.readyState.addTransition(self.aboutButton.clicked, self.aboutState)
@@ -288,7 +378,7 @@ class MainWindow(QMainWindow):
         aboutDialog = AboutDialog(parent=self)
         aboutDialog.exec()
 
-    def setupCopyToClipboard(self) -> None:
+    def setupCopyToClipboardState(self) -> None:
         self.copyState.entered.connect(self.copyToClipboard)
         self.copyState.addTransition(self.readyState)
         self.readyState.addTransition(self.copyButton.clicked, self.copyState)
@@ -307,6 +397,48 @@ class MainWindow(QMainWindow):
             self.resetButtonClicked(False)
             self.imdbEdit.setText(text)
             self.getButtonClicked(False)
+
+    @Slot()
+    def checkDatabase(self) -> None:
+        if database_exists():
+            self.showLastUpdated()
+            self.databaseValid.emit()
+        else:
+            self.databaseInvalid.emit()
+
+    def newDatabase(self) -> None:
+        worker = Worker(dataset_downward_size)
+        worker.signals.result.connect(self.newDatabaseSizeResult)
+        worker.signals.error.connect(self.newDatabaseException)
+        self.threadpool.start(worker)
+
+    @Slot(object)
+    def newDatabaseSizeResult(self, data: object) -> None:
+        size = int(data)
+        s = f"{format_bytes(size)} " if size > 0 else ""
+
+        ret = QMessageBox.question(
+            self,
+            "Database Required",
+            "To continue this program will download from IMDb a publicly "
+            f"available {s}dataset.\n\n"
+            "The dataset will then be converted into a database about 1 GB in "
+            "size, which may take a few minutes. "
+            "Without this database, the program is unable to function.\n\n"
+            "Do you want this program to proceed with the download and conversion?",
+        )
+        if ret == QMessageBox.StandardButton.No:
+            self.controller.doNotCreateDataset.emit()
+        else:
+            self.controller.createDataset.emit()
+
+    @Slot(Exception)
+    def newDatabaseException(self, exception: Exception) -> None:
+        logger.debug("Error getting dataset size")
+        logger.error("%s: %s", exception.__class__.__name__, str(exception))
+        if not database_exists():
+            # Allow for Internet connection problems: prompt again
+            self.newDatabaseSizeResult(0)
 
     @Slot(str)
     def titleEditTextEdited(self, text: str) -> None:
@@ -364,66 +496,6 @@ class MainWindow(QMainWindow):
         self.yearSpinbox.setValue(0)
         self.yearSpinbox.clear()
         self.folderLabel.clear()
-
-    @Slot(bool)
-    def downloadButtonClicked(self, checked: bool) -> None:
-
-        self.progressDialog = QProgressDialog(
-            "Checking IMDb dataset...", None, 0, 0, self
-        )
-        self.progressDialog.setMinimumDuration(0)
-        self.progressDialog.setValue(0)
-        self.progressDialog.setWindowModality(Qt.WindowModality.WindowModal)
-        self.progressDialog.setAutoReset(False)
-
-        worker = Worker(download_and_convert, self.settings.value("Last_Modified", ""))
-        worker.signals.result.connect(self.downloadResult)
-        worker.signals.finished.connect(self.downloadComplete)
-        worker.signals.progress.connect(self.downloadProgress)
-        worker.signals.error.connect(self.downloadException)
-        self.threadpool.start(worker)
-
-    @Slot(tuple)
-    def downloadProgress(self, data: tuple) -> None:
-        text, progress, maximum = data
-        if text and text != self.progressDialog.labelText():
-            self.progressDialog.setLabelText(text)
-        if maximum >= 0:
-            self.progressDialog.setMaximum(maximum)
-        self.progressDialog.setValue(progress)
-
-    @Slot(object)
-    def downloadResult(self, data: str) -> None:
-        if data == "ALREADY_DOWNLOADED":
-            QMessageBox.information(
-                self,
-                "IMDb Dataset",
-                "The most recent dataset has already been downloaded.",
-            )
-        elif data:
-            # Set flag to indicate the dataset has been converted
-            self.pending_operation |= PendingOperation.INFORM_DATASET_CONVERTED
-            self.settings.setValue("Last_Modified", data)
-
-    @Slot()
-    def downloadComplete(self) -> None:
-        if PendingOperation.INFORM_DATASET_CONVERTED in self.pending_operation:
-            self.playSound("choh.mp3")
-            # Remove the flag
-            self.pending_operation &= ~PendingOperation.INFORM_DATASET_CONVERTED
-
-        self.progressDialog.reset()
-        self.showLastUpdated()
-        if PendingOperation.IMDB_ID_SEARCH in self.pending_operation:
-            QTimer.singleShot(0, self.getButton.clicked.emit)
-
-    @Slot()
-    def downloadException(self, exception: Exception) -> None:
-        logger.error("Error updating dataset")
-        logger.error("%s", exception)
-        QMessageBox.critical(self, "Error updating dataset", str(exception))
-        if not database_exists():
-            QTimer.singleShot(0, self.datasetRequired)
 
     @Slot()
     def showLastUpdated(self) -> None:
@@ -581,7 +653,7 @@ class MainWindow(QMainWindow):
                     )
                     if ret == QMessageBox.StandardButton.Yes:
                         self.pending_operation |= PendingOperation.IMDB_ID_SEARCH
-                        QTimer.singleShot(0, self.downloadButton.clicked.emit)
+                        QTimer.singleShot(0, self.updateButton.clicked.emit)
                 else:
                     # The dataset was already refreshed. Don't prompt again.
                     # Clear the flag
@@ -630,36 +702,3 @@ class MainWindow(QMainWindow):
     def playSound(self, sound: str) -> None:
         logger.debug("Using Qt to play audio")
         play_sound(soundfile=sound)
-
-    def datasetRequired(self) -> None:
-        worker = Worker(dataset_downward_size)
-        worker.signals.result.connect(self.datasetRequiredSize)
-        self.threadpool.start(worker)
-
-    @Slot(object)
-    def datasetRequiredSize(self, data: object) -> None:
-        size = int(data)
-        s = f"{format_bytes(size)} " if size > 0 else ""
-
-        ret = QMessageBox.question(
-            self,
-            "Database Required",
-            "To continue this program will download from IMDb a publicly "
-            f"available {s}dataset.\n\n"
-            "The dataset will then be converted into a database about 1 GB in "
-            "size, which may take a few minutes. "
-            "Without this database, the program is unable to function.\n\n"
-            "Do you want this program to proceed with the download and conversion?",
-        )
-        if ret == QMessageBox.StandardButton.No:
-            self.close()
-        else:
-            QTimer.singleShot(0, self.downloadButton.clicked.emit)
-
-    @Slot(Exception)
-    def datasetRequiredException(self, exception: Exception) -> None:
-        logger.debug("Error getting dataset size")
-        logger.error("%s: %s", exception.__class__.__name__, str(exception))
-        if not database_exists():
-            # Allow for Internet connection problems: prompt again
-            self.datasetRequiredSize(0)
