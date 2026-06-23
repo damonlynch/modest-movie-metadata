@@ -128,6 +128,18 @@ class AboutDialog(QDialog):
             f" {link_style}>GNU Lesser General Public License, version 3</a>"
         )
 
+        imdb_link = (
+            f'(<a href="https://www.imdb.com" {link_style}>https://www.imdb.com</a>)'
+        )
+        restriction_link = (
+            "https://help.imdb.com/article/imdb/general-information/"
+            "can-i-use-imdb-data-in-my-software/G5JTRESSHJBBHTGX"
+        )
+        imdb_restrictions = (
+            f'<a href="{restriction_link}" {link_style}>'
+            f"personal and non-commercial use</a>"
+        )
+
         if pyqt_api():
             api_version = qtpy.PYQT_VERSION
             api_name = "PyQt"
@@ -147,6 +159,9 @@ class AboutDialog(QDialog):
         
         Uses {api_name} {api_version}{qt_licence}.
         Uses Qt {QtCore.__version__}{lgpl3desc}.
+        
+        Information courtesy of IMDb {imdb_link}. Used with permission.
+        IMDb's data can only be used for {imdb_restrictions}.
         """
 
         credits_text = credits_text.replace("\n", "<br>\n")

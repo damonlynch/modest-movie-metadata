@@ -16,14 +16,14 @@ If you prefer, you can enter only the title and year, and attempt to look up the
 
 The program does not create or monitor folders on the file system.
 
-To function, the program will download a dataset from IMDb, and convert it into a database. The database contains:
+To function, the program will download a dataset [published by IMDb](https://developer.imdb.com/non-commercial-datasets/) for non-commercial, personal use.  The  dataset will be converted into a database. The database contains:
 1. the title's IMDb ID, e.g. `tt0084988`
 2. the primary title, e.g. `The Black Adder`
 3. the year the title premiered, e.g. `1983`
 
 At the time of writing, the IMDb dataset has over twelve and a half million titles. It is regularly updated by IMDb. If the program does not recognize an IMDb ID, the program itself will prompt to update its database; you can also manually update it.
 
-Tested under Windows 10 and 11. This project is not affiliated with Jellyfin or IMDb.
+Tested under Windows 10 and 11. This project is not affiliated with Jellyfin or IMDb. IMDb's data can only be used for [personal and non-commercial use]( https://help.imdb.com/article/imdb/general-information/can-i-use-imdb-data-in-my-software/G5JTRESSHJBBHTGX).
 
 ## Installation
 
