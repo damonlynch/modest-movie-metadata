@@ -35,9 +35,7 @@ def fetch_movie_info(
             title, year = data
             return [MovieInfo(title=title, year=year, imdb_id=imdb_id)]
         else:
-            # imdb_id with non-existent values for title and year represents a failed
-            # lookup
-            return [MovieInfo(title="", year=None, imdb_id=imdb_id)]
+            return None
 
     else:
         try:

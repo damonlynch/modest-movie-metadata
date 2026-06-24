@@ -1,7 +1,8 @@
 #  SPDX-FileCopyrightText: 2026 Damon Lynch <damonlynch@gmail.com>
 #  SPDX-License-Identifier: GPL-3.0-or-later
 
-from qtpy.QtStateMachine import QFinalState, QState
+from qtpy.QtCore import QObject, Signal
+from qtpy.QtStateMachine import QFinalState, QHistoryState, QState
 
 from modestmoviemetadata.tools.logtools import get_logger
 
@@ -11,6 +12,19 @@ logger = get_logger()
 class State(QState):
     def __init__(self, name: str, parent: QState | None = None) -> None:
         super().__init__(parent)
+        self.setObjectName(name)
+
+    def onEntry(self, event):
+        logger.debug(f"ENTER: {self.objectName()}")
+
+    def onExit(self, event):
+        logger.debug(f"EXIT: {self.objectName()}")
+
+
+class HistoryState(QHistoryState):
+    def __init__(self, name: str, parent: QState) -> None:
+        super().__init__(parent)
+        assert parent is not None
         self.setObjectName(name)
 
     def onEntry(self, event):
@@ -30,3 +44,24 @@ class FinalState(QFinalState):
 
     def onExit(self, event):
         logger.debug(f"EXIT: {self.objectName()}")
+
+
+class StateMachineSignals(QObject):
+    machineClosing = Signal()
+    machineInitialized = Signal()
+    databaseValid = Signal()
+    databaseInvalid = Signal()
+    update = Signal()
+    updateFinished = Signal()
+    updateError = Signal()
+    searchDataset = Signal()
+    searchDatasetNothingFound = Signal()
+    searchDatasetInsufficientData = Signal()
+    searchDatasetError = Signal()
+    addTitleIndex = Signal()
+    addTitleIndexCancelled = Signal()
+    addTitleIndexFinished = Signal()
+    addTitleIndexRefused = Signal()
+    addTitleIndexError = Signal()
+    doNotCreateDataset = Signal()
+    copyToClipboard = Signal()

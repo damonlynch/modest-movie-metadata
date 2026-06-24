@@ -1,7 +1,7 @@
 #  SPDX-FileCopyrightText: 2022-2026 Damon Lynch <damonlynch@gmail.com>
 #  SPDX-License-Identifier: GPL-3.0-or-later
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from enum import Flag, auto
 from typing import cast
 
@@ -46,11 +46,16 @@ from modestmoviemetadata.tools.utilities import (
 )
 from modestmoviemetadata.tools.viewutils import boxBorderColor
 from modestmoviemetadata.ui.aboutdialog import AboutDialog
-from modestmoviemetadata.ui.appthreading import ProxySignals, Worker
+from modestmoviemetadata.ui.appthreading import Worker
 from modestmoviemetadata.ui.fancylineedit import FancyLineEdit
 from modestmoviemetadata.ui.narrowspinbox import NarrowSpinbox
 from modestmoviemetadata.ui.selectrecord import SelectRecord
-from modestmoviemetadata.ui.state import FinalState, State
+from modestmoviemetadata.ui.state import (
+    FinalState,
+    HistoryState,
+    State,
+    StateMachineSignals,
+)
 
 logger = get_logger()
 
@@ -65,11 +70,6 @@ IMDB_YEAR_MIN = 1894
 
 
 class MainWindow(QMainWindow):
-    machineClosing = Signal()
-    machineInitialized = Signal()
-    databaseValid = Signal()
-    databaseInvalid = Signal()
-
     def __init__(
         self,
     ) -> None:
@@ -79,10 +79,16 @@ class MainWindow(QMainWindow):
         self.setWindowIcon(QIcon(program_icon_path()))
 
         self.settings = QSettings()
+        # Three date time settings:
+        # Last_Modified: When IMDb last modified their dataset (UTC)
+        # Last_Updated: When the dataset was last converted into a database by this
+        # program
+        # Last_Prompted: When this program last prompted the user to update the
+        # dataset after an unsuccessful search.
 
         self.threadpool = QThreadPool()
         self.threadpool.setMaxThreadCount(1)
-        self.controller = ProxySignals()
+        self.controller = StateMachineSignals()
 
         self.clipboard = QGuiApplication.clipboard()
         self.clipboard.changed.connect(self.clipboardDataChanged)
@@ -96,7 +102,10 @@ class MainWindow(QMainWindow):
 
         self.centralWidget().setEnabled(False)
         self.show()
-        QTimer.singleShot(0, self.machineInitialized.emit)
+        QTimer.singleShot(0, self.controller.machineInitialized.emit)
+        self.validateConfigDirectory()
+
+    def validateConfigDirectory(self) -> None:
         if program_appdata_directory() is None:
             QMessageBox.critical(
                 self,
@@ -107,7 +116,7 @@ class MainWindow(QMainWindow):
             QTimer.singleShot(0, self.close)
 
     def closeEvent(self, event: QCloseEvent):
-        self.machineClosing.emit()
+        self.controller.machineClosing.emit()
         event.accept()
 
     def setupWidgets(self) -> None:
@@ -185,17 +194,19 @@ class MainWindow(QMainWindow):
         self.resetButton.setToolTip("Clear the IMDb, Title and Year values")
 
         self.copyButton = self.buttonBox.button(QDialogButtonBox.StandardButton.Apply)
+        self.copyButton.clicked.connect(self.controller.copyToClipboard)
         self.copyButton.setText("&Copy")
         self.copyButton.setToolTip("Copy the Jellyfin folder name to the clipboard")
 
         self.getButton = self.buttonBox.button(QDialogButtonBox.StandardButton.Open)
         self.getButton.setText("&Get")
-        self.getButton.clicked.connect(self.getButtonClicked)
+        self.getButton.clicked.connect(self.controller.searchDataset)
         self.getButton.setToolTip("Get the Jellyfin folder name")
 
         self.updateButton = self.buttonBox.addButton(
             QDialogButtonBox.StandardButton.Reset
         )
+        self.updateButton.clicked.connect(self.controller.update)
         self.updateButton.setText("&Update Dataset")
         self.updateButton.setToolTip("Get the latest online IMDb dataset")
 
@@ -242,28 +253,41 @@ class MainWindow(QMainWindow):
 
     def setupStateMachine(self) -> None:
 
+        self.createStates()
+        self.configureStateMachine()
+        self.configureStates()
+
+        self.machine.start()
+
+    def createStates(self) -> None:
         self.initializingState = State(name="initializingState")
         self.checkDatabaseState = State(name="checkDatabaseState")
         self.newDatabaseState = State(name="newDatabaseState")
-        self.readyState = State(name="readyState")
         self.resetState = State(name="resetState")
-        self.errorState = State(name="errorState")
-        self.updateState = State(name="updateState")
+        self.operationalState = State(name="operationalState")
+        self.operationalHistoryState = HistoryState(
+            name="operationalHistoryState", parent=self.operationalState
+        )
+        self.readyState = State(name="readyState", parent=self.operationalState)
+        self.updateState = State(name="updateState", parent=self.operationalState)
+        self.searchDatasetState = State(
+            name="searchDatasetState", parent=self.operationalState
+        )
+        self.addTitleIndexState = State(name="addTitleIndexState")
         self.copyState = State(name="copyState")
         self.aboutState = State(name="aboutState")
+        self.errorState = State(name="errorState")
         self.finalState = FinalState(name="finalState")
 
-        self.readyState.assignProperty(self.mainWidget, "enabled", True)
-        self.readyState.addTransition(self.machineClosing, self.finalState)
-
+    def configureStateMachine(self) -> None:
         self.machine = QStateMachine()
         self.machine.addState(self.initializingState)
         self.machine.addState(self.checkDatabaseState)
         self.machine.addState(self.newDatabaseState)
-        self.machine.addState(self.readyState)
+        self.machine.addState(self.operationalState)
         self.machine.addState(self.errorState)
         self.machine.addState(self.resetState)
-        self.machine.addState(self.updateState)
+        self.machine.addState(self.addTitleIndexState)
         self.machine.addState(self.copyState)
         self.machine.addState(self.aboutState)
         self.machine.addState(self.finalState)
@@ -271,32 +295,35 @@ class MainWindow(QMainWindow):
         self.machine.setInitialState(self.initializingState)
         self.machine.finished.connect(self.close)
 
-        self.setupDatabaseStates()
-        self.setupResetState()
-        self.setupUpdateState()
-        self.setupCopyToClipboardState()
-        self.setupAboutState()
+    def configureStates(self) -> None:
 
-        self.machine.start()
-
-    def setupDatabaseStates(self) -> None:
+        # Check database state at start-up
         self.initializingState.addTransition(
-            self.machineInitialized, self.checkDatabaseState
+            self.controller.machineInitialized, self.checkDatabaseState
         )
         self.checkDatabaseState.entered.connect(self.checkDatabase)
-        self.checkDatabaseState.addTransition(self.databaseValid, self.readyState)
         self.checkDatabaseState.addTransition(
-            self.databaseInvalid, self.newDatabaseState
+            self.controller.databaseValid, self.operationalState
+        )
+        self.checkDatabaseState.addTransition(
+            self.controller.databaseInvalid, self.newDatabaseState
         )
         self.newDatabaseState.entered.connect(self.newDatabase)
-        self.newDatabaseState.addTransition(
-            self.controller.createDataset, self.updateState
-        )
+        self.newDatabaseState.addTransition(self.controller.update, self.updateState)
         self.newDatabaseState.addTransition(
             self.controller.doNotCreateDataset, self.finalState
         )
 
-    def setupResetState(self) -> None:
+        self.operationalState.setInitialState(self.readyState)
+        self.operationalHistoryState.setDefaultState(self.readyState)
+
+        self.readyState.assignProperty(self.mainWidget, "enabled", True)
+        self.readyState.addTransition(self.controller.machineClosing, self.finalState)
+        self.readyState.addTransition(self.controller.update, self.updateState)
+        self.readyState.addTransition(
+            self.controller.searchDataset, self.searchDatasetState
+        )
+
         self.resetState.entered.connect(self.titleEdit.clear)
         self.resetState.entered.connect(self.yearSpinbox.clear)
         self.resetState.entered.connect(self.imdbEdit.clear)
@@ -304,12 +331,55 @@ class MainWindow(QMainWindow):
         self.resetState.addTransition(self.readyState)
         self.readyState.addTransition(self.resetButton.clicked, self.resetState)
 
-    def setupUpdateState(self) -> None:
         self.updateState.entered.connect(self.updateDataset)
 
-        self.updateState.addTransition(self.controller.updateFinished, self.readyState)
+        self.updateState.addTransition(
+            self.controller.updateFinished, self.operationalHistoryState
+        )
         self.updateState.addTransition(self.controller.updateError, self.errorState)
-        self.readyState.addTransition(self.updateButton.clicked, self.updateState)
+
+        self.searchDatasetState.entered.connect(self.searchDataset)
+        self.searchDatasetState.addTransition(self.controller.update, self.updateState)
+        self.searchDatasetState.addTransition(
+            self.controller.addTitleIndex, self.addTitleIndexState
+        )
+        self.searchDatasetState.addTransition(
+            self.controller.addTitleIndexError, self.errorState
+        )
+        self.searchDatasetState.addTransition(
+            self.controller.searchDatasetNothingFound, self.readyState
+        )
+        self.searchDatasetState.addTransition(
+            self.controller.searchDatasetInsufficientData, self.readyState
+        )
+
+        self.addTitleIndexState.entered.connect(self.addTitleIndex)
+        self.addTitleIndexState.addTransition(
+            self.controller.addTitleIndexCancelled, self.readyState
+        )
+        self.addTitleIndexState.addTransition(
+            self.controller.addTitleIndexFinished, self.searchDatasetState
+        )
+        self.addTitleIndexState.addTransition(
+            self.controller.addTitleIndexError, self.readyState
+        )
+        self.addTitleIndexState.addTransition(
+            self.controller.addTitleIndexRefused, self.searchDatasetState
+        )
+
+        self.copyState.entered.connect(self.copyToClipboard)
+        self.copyState.addTransition(self.readyState)
+        self.readyState.addTransition(self.controller.copyToClipboard, self.copyState)
+        self.searchDatasetState.addTransition(
+            self.controller.copyToClipboard, self.copyState
+        )
+
+        self.aboutState.entered.connect(self.showAboutDialog)
+        self.aboutState.addTransition(self.readyState)
+        self.readyState.addTransition(self.aboutButton.clicked, self.aboutState)
+
+        # TODO do something more sophisticated here than merely exit without warning!
+        self.errorState.addTransition(self.finalState)
 
     @Slot()
     def updateDataset(self) -> None:
@@ -350,6 +420,7 @@ class MainWindow(QMainWindow):
             # Set flag to indicate the dataset has been converted
             self.pending_operation |= PendingOperation.INFORM_DATASET_CONVERTED
             self.settings.setValue("Last_Modified", data)
+            self.settings.setValue("Last_Updated", datetime.now().isoformat())
 
     @Slot()
     def updateComplete(self) -> None:
@@ -368,20 +439,117 @@ class MainWindow(QMainWindow):
         # TODO reset the progress window, perhaps by using a state
         self.controller.updateError.emit()
 
-    def setupAboutState(self) -> None:
-        self.aboutState.entered.connect(self.showAboutDialog)
-        self.aboutState.addTransition(self.readyState)
-        self.readyState.addTransition(self.aboutButton.clicked, self.aboutState)
+    @Slot()
+    def searchDataset(self):
+        title = self.titleEdit.text().strip()
+        year = self.yearSpinbox.value()
+        if year == IMDB_YEAR_MIN - 1:
+            year = None
+        imdb_id = self.imdbEdit.text().strip()
+
+        if not self.sufficientDataForSearchDataset(title, year, imdb_id):
+            self.controller.searchDatasetInsufficientData.emit()
+            return
+
+        if not imdb_id and title:
+            if not title_index_exists():
+                self.controller.addTitleIndex.emit()
+                return
+
+            searching_for = f"{title} ({year})" if year is not None else title
+            self.progressDialog = QProgressDialog(
+                f"Searching for {searching_for}...", None, 0, 0, self
+            )
+            self.progressDialog.setMinimumDuration(0)
+            self.progressDialog.setValue(0)
+            self.progressDialog.setWindowModality(Qt.WindowModality.WindowModal)
+            self.progressDialog.setAutoReset(False)
+
+        logger.debug("Fetching movie info %s (%s) %s", title, year, imdb_id)
+        worker = Worker(fetch_movie_info, title, year, imdb_id)
+        worker.signals.result.connect(self.movieInfoExtracted)
+        worker.signals.error.connect(self.movieInfoException)
+        self.threadpool.start(worker)
+
+    @staticmethod
+    def sufficientDataForSearchDataset(
+        title: str, year: int | None, imdb_id: str
+    ) -> bool:
+        if not (title or year or imdb_id):
+            return False
+
+        if not title:
+            if len(imdb_id) < 2:
+                return False
+
+            if not imdb_id[2:].isdigit():
+                return False
+        return True
+
+    @Slot()
+    def addTitleIndex(self) -> None:
+        key = "Title_Index_Message"
+        if not self.settings.value(key, ""):
+            logger.debug("Prompting whether to add primary title index")
+            msgBox = QMessageBox(parent=self)
+            msgBox.setWindowTitle("Database Optimization")
+            msgBox.setText(
+                "Searching by title requires additional database optimization to "
+                "improve speed. This process may take a few minutes.\n\n"
+                "Do you agree?\n"
+            )
+            msgBox.setIcon(QMessageBox.Icon.Question)
+            msgBox.setStandardButtons(
+                QMessageBox.StandardButton.Yes
+                | QMessageBox.StandardButton.No
+                | QMessageBox.StandardButton.Cancel
+            )
+            cb = QCheckBox("Don't show this again")
+            msgBox.setCheckBox(cb)
+            ret = msgBox.exec()
+            if cb.isChecked():
+                # This value can be set to anything; the value merely has to exist
+                self.settings.setValue(key, "do not show")
+            if ret == QMessageBox.StandardButton.Cancel:
+                logger.debug("User cancelled index creation")
+                self.controller.addTitleIndexCancelled.emit()
+                return
+
+            if ret == QMessageBox.StandardButton.No:
+                logger.debug("User refused index creation")
+                self.controller.addTitleIndexRefused.emit()
+                return
+
+        # The user has agreed to creating the index, either previously or just now
+        self.progressDialog = QProgressDialog(
+            "Optimizing Database...", None, 0, 0, self
+        )
+        self.progressDialog.setMinimumDuration(0)
+        self.progressDialog.setValue(0)
+        self.progressDialog.setWindowModality(Qt.WindowModality.WindowModal)
+        self.progressDialog.setAutoReset(False)
+
+        worker = Worker(create_title_index)
+        worker.signals.finished.connect(self.addTitleIndexFinished)
+        worker.signals.error.connect(self.addTitleIndexException)
+        self.threadpool.start(worker)
+
+    @Slot()
+    def addTitleIndexFinished(self) -> None:
+        self.controller.addTitleIndexFinished.emit()
+        self.progressDialog.reset()
+
+    @Slot(Exception)
+    def addTitleIndexException(self, exception: Exception) -> None:
+        logger.error(str(exception))
+        QMessageBox.critical(self, "Error optimizing dataset", str(exception))
+        self.controller.addTitleIndexError.emit()
+        self.progressDialog.reset()
 
     @Slot()
     def showAboutDialog(self) -> None:
         aboutDialog = AboutDialog(parent=self)
         aboutDialog.exec()
-
-    def setupCopyToClipboardState(self) -> None:
-        self.copyState.entered.connect(self.copyToClipboard)
-        self.copyState.addTransition(self.readyState)
-        self.readyState.addTransition(self.copyButton.clicked, self.copyState)
 
     @Slot()
     def copyToClipboard(self) -> None:
@@ -396,15 +564,15 @@ class MainWindow(QMainWindow):
             logger.debug("IMDb id %s detected in clipboard", text)
             self.resetButtonClicked(False)
             self.imdbEdit.setText(text)
-            self.getButtonClicked(False)
+            self.controller.searchDataset.emit()
 
     @Slot()
     def checkDatabase(self) -> None:
         if database_exists():
             self.showLastUpdated()
-            self.databaseValid.emit()
+            self.controller.databaseValid.emit()
         else:
-            self.databaseInvalid.emit()
+            self.controller.databaseInvalid.emit()
 
     def newDatabase(self) -> None:
         worker = Worker(dataset_downward_size)
@@ -430,7 +598,7 @@ class MainWindow(QMainWindow):
         if ret == QMessageBox.StandardButton.No:
             self.controller.doNotCreateDataset.emit()
         else:
-            self.controller.createDataset.emit()
+            self.controller.update.emit()
 
     @Slot(Exception)
     def newDatabaseException(self, exception: Exception) -> None:
@@ -456,7 +624,7 @@ class MainWindow(QMainWindow):
         self.resetButtonClicked(False)
         self.imdbEdit.setText(text)
         if text.startswith("tt") and len(text) > 2 and text[2:].isdigit():
-            self.getButtonClicked(False)
+            self.controller.searchDataset.emit()
 
     @Slot(int)
     def yearSpinboxValueChanged(self, value: int) -> None:
@@ -499,165 +667,40 @@ class MainWindow(QMainWindow):
 
     @Slot()
     def showLastUpdated(self) -> None:
-        last_modified = cast(str, self.settings.value("Last_Modified", ""))
-        if not last_modified:
+        last_modified = self.convertTimeFromIsoFormat(setting="Last_Modified")
+        if last_modified is None:
             self.lastUpdatedLabel.setText("")
         else:
-            try:
-                last_modified_dt = datetime.fromisoformat(last_modified)
-            except ValueError:
-                logger.error(
-                    "Invalid Last Modified ISO date time value %s", last_modified
-                )
-                self.lastUpdatedLabel.setText("")
-            else:
-                last_modified = arrow.get(last_modified_dt).humanize()
-                self.lastUpdatedLabel.setText(
-                    f"Using IMDb's dataset released {last_modified}"
-                )
-
-    def searchByTitle(self) -> bool:
-        if PendingOperation.TITLE_SEARCH in self.pending_operation:
-            logger.debug(
-                "Searching by title because Title Search pending operation set"
+            self.lastUpdatedLabel.setText(
+                f"Using IMDb's dataset released {arrow.get(last_modified).humanize()}"
             )
-            return True
-
-        if not title_index_exists():
-            key = "Title_Index_Message"
-            if not self.settings.value(key, ""):
-                logger.debug("Prompting whether to add primary title index")
-                msgBox = QMessageBox(parent=self)
-                msgBox.setWindowTitle("Database Optimization")
-                msgBox.setText(
-                    "Searching by title requires additional database optimization to "
-                    "improve speed. This process may take a few minutes.\n\n"
-                    "Do you agree?\n"
-                )
-                msgBox.setIcon(QMessageBox.Icon.Question)
-                msgBox.setStandardButtons(
-                    QMessageBox.StandardButton.Yes
-                    | QMessageBox.StandardButton.No
-                    | QMessageBox.StandardButton.Cancel
-                )
-                cb = QCheckBox("Don't show this again")
-                msgBox.setCheckBox(cb)
-                ret = msgBox.exec()
-                if cb.isChecked():
-                    # This value can be set to anything; the value merely has to exist
-                    self.settings.setValue(key, "do not show")
-                if ret == QMessageBox.StandardButton.Cancel:
-                    logger.debug("User cancelled index creation")
-                    return False
-                if ret == QMessageBox.StandardButton.Yes:
-                    self.progressDialog = QProgressDialog(
-                        "Optimizing Database...", None, 0, 0, self
-                    )
-                    self.progressDialog.setMinimumDuration(0)
-                    self.progressDialog.setValue(0)
-                    self.progressDialog.setWindowModality(Qt.WindowModality.WindowModal)
-                    self.progressDialog.setAutoReset(False)
-
-                    worker = Worker(create_title_index)
-                    worker.signals.finished.connect(self.titleIndexCreationFinished)
-                    worker.signals.error.connect(self.titleIndexCreationException)
-                    # Set the flag to indicate a title search needs to be done
-                    # after the index is created
-                    self.pending_operation |= PendingOperation.TITLE_SEARCH
-                    self.threadpool.start(worker)
-                    return False
-
-        self.pending_operation |= PendingOperation.TITLE_SEARCH
-        return True
-
-    @Slot()
-    def titleIndexCreationFinished(self) -> None:
-        QTimer.singleShot(0, self.getButton.clicked.emit)
-        self.progressDialog.reset()
-
-    @Slot(Exception)
-    def titleIndexCreationException(self, exception: Exception) -> None:
-        logger.error(str(exception))
-        if PendingOperation.TITLE_SEARCH in self.pending_operation:
-            self.pending_operation &= ~PendingOperation.TITLE_SEARCH
-        self.progressDialog.reset()
-
-    @Slot(bool)
-    def getButtonClicked(self, checked: bool) -> None:
-        title = self.titleEdit.text().strip()
-        year = self.yearSpinbox.value()
-        if year == IMDB_YEAR_MIN - 1:
-            year = None
-        imdb_id = self.imdbEdit.text().strip()
-
-        if not (title or year or imdb_id):
-            return
-
-        if not imdb_id and title:
-            if not self.searchByTitle():
-                if PendingOperation.TITLE_SEARCH in self.pending_operation:
-                    logger.debug("Deferring searching by title until index created")
-                else:
-                    logger.debug("Not searching by title")
-                return
-
-            searching_for = f"{title} ({year})" if year is not None else title
-            self.progressDialog = QProgressDialog(
-                f"Searching for {searching_for}...", None, 0, 0, self
-            )
-            self.progressDialog.setMinimumDuration(0)
-            self.progressDialog.setValue(0)
-            self.progressDialog.setWindowModality(Qt.WindowModality.WindowModal)
-            self.progressDialog.setAutoReset(False)
-
-        if not title:
-            if len(imdb_id) < 2:
-                return
-
-            if not imdb_id[2:].isdigit():
-                return
-
-        logger.debug("Fetching movie info %s (%s) %s", title, year, imdb_id)
-        worker = Worker(fetch_movie_info, title, year, imdb_id)
-        worker.signals.result.connect(self.movieInfoExtracted)
-        worker.signals.error.connect(self.movieInfoException)
-        self.threadpool.start(worker)
 
     @Slot(object)
     def movieInfoExtracted(self, movie_infos: list[MovieInfo | None]) -> None:
 
-        if PendingOperation.TITLE_SEARCH in self.pending_operation:
+        if hasattr(self, "progressDialog") and self.progressDialog.isVisible():
             self.progressDialog.reset()
-            # Unset the Title Search flag
-            self.pending_operation &= ~PendingOperation.TITLE_SEARCH
 
         movie_info = None
 
         if movie_infos is None:
+            if self.promptForDatasetUpdate():
+                ret = QMessageBox.question(
+                    self,
+                    "Update local database?",
+                    "The IMDb id is not found in the local database.\n\n"
+                    "Do you want to update the local database using the latest "
+                    "IMDb dataset?",
+                )
+                self.settings.setValue("Last_Prompted", datetime.now().isoformat())
+                if ret == QMessageBox.StandardButton.Yes:
+                    self.controller.update.emit()
+                    return
+            self.controller.searchDatasetNothingFound.emit()
             return
 
         if len(movie_infos) == 1:
             movie_info = movie_infos[0]
-            # Was the information found in the local database using the IMDb id?
-            if not movie_info.title and movie_info.year is None and movie_info.imdb_id:
-                # It wasn't
-                self.resetContentsExceptIMDbId()
-                # if there is no pending search operation
-                if (PendingOperation.IMDB_ID_SEARCH & self.pending_operation) == 0:
-                    ret = QMessageBox.question(
-                        self,
-                        "Update local database?",
-                        "The IMDb id is not found in the local database.\n\n"
-                        "Do you want to update the local database using the latest "
-                        "IMDb dataset?",
-                    )
-                    if ret == QMessageBox.StandardButton.Yes:
-                        self.pending_operation |= PendingOperation.IMDB_ID_SEARCH
-                        QTimer.singleShot(0, self.updateButton.clicked.emit)
-                else:
-                    # The dataset was already refreshed. Don't prompt again.
-                    # Clear the flag
-                    self.pending_operation &= ~PendingOperation.IMDB_ID_SEARCH
 
         elif len(movie_infos) > 1:
             self.playSound("brrr.mp3")
@@ -669,7 +712,9 @@ class MainWindow(QMainWindow):
             logger.debug("%s (%s)", movie_info.title, movie_info.year)
             self.setMovieInfo(movie_info)
             self.generateOutput()
-            QTimer.singleShot(0, self.copyButton.clicked.emit)
+            self.controller.copyToClipboard.emit()
+        else:
+            self.controller.searchDatasetNothingFound.emit()
 
     def setMovieInfo(self, movieInfo: MovieInfo) -> None:
         if movieInfo.title:
@@ -693,12 +738,38 @@ class MainWindow(QMainWindow):
         logger.debug("Error getting movie information")
         logger.error("%s: %s", exception.__class__.__name__, str(exception))
         self.playSound("error.mp3")
-        if PendingOperation.TITLE_SEARCH in self.pending_operation:
+        if hasattr(self, "progressDialog") and self.progressDialog.isVisible():
             self.progressDialog.reset()
-            # Unset the Title Search flag
-            self.pending_operation &= ~PendingOperation.TITLE_SEARCH
+        self.controller.searchDatasetError.emit()
 
     @Slot(str)
     def playSound(self, sound: str) -> None:
         logger.debug("Using Qt to play audio")
         play_sound(soundfile=sound)
+
+    def convertTimeFromIsoFormat(self, setting: str) -> datetime | None:
+        iso_format = cast(str, self.settings.value(setting, ""))
+        if iso_format:
+            try:
+                return datetime.fromisoformat(iso_format)
+            except ValueError:
+                logger.error("Invalid %s ISO date time value %s", setting, iso_format)
+        return None
+
+    def promptForDatasetUpdate(self) -> bool:
+        """
+        Determine whether it makes sense to prompt the user whether they want to update
+        the IMDb dataset
+        :return: True if the user has not been prompted within the last 24 hours and
+        the local database was not updated within the last 24 hours
+        """
+
+        now = datetime.now()
+        delta = timedelta(hours=24)
+
+        last_prompted = self.convertTimeFromIsoFormat(setting="Last_Prompted")
+        if last_prompted is not None and now - last_prompted < delta:
+            return False
+
+        last_update = self.convertTimeFromIsoFormat(setting="Last_Updated")
+        return last_update is not None and now - last_update > delta

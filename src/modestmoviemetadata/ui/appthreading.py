@@ -33,14 +33,6 @@ class WorkerSignals(QObject):
     progress = Signal(tuple)
 
 
-class ProxySignals(QObject):
-    updateStarted = Signal()
-    updateFinished = Signal()
-    updateError = Signal()
-    createDataset = Signal()
-    doNotCreateDataset = Signal()
-
-
 class Worker(QRunnable):
     """
     Worker thread
