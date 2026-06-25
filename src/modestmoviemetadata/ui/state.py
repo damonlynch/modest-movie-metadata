@@ -10,8 +10,13 @@ logger = get_logger()
 
 
 class State(QState):
-    def __init__(self, name: str, parent: QState | None = None) -> None:
-        super().__init__(parent)
+    def __init__(
+        self,
+        name: str,
+        childMode: QState.ChildMode = QState.ChildMode.ExclusiveStates,
+        parent: QState | None = None,
+    ) -> None:
+        super().__init__(childMode=childMode, parent=parent)
         self.setObjectName(name)
 
     def onEntry(self, event):
@@ -55,7 +60,8 @@ class StateMachineSignals(QObject):
     updateFinished = Signal()
     updateError = Signal()
     searchDataset = Signal()
-    searchDatasetNothingFound = Signal()
+    searchDatasetTitleFound = Signal()
+    searchDatasetTitleNotFound = Signal()
     searchDatasetInsufficientData = Signal()
     searchDatasetError = Signal()
     addTitleIndex = Signal()

@@ -6,9 +6,18 @@ from enum import Flag, auto
 from typing import cast
 
 import arrow
-from qtpy.QtCore import QObject, QSettings, QSize, Qt, QThreadPool, QTimer, Signal, Slot
+from qtpy.QtCore import (
+    QSettings,
+    QSignalBlocker,
+    QSize,
+    Qt,
+    QThreadPool,
+    QTimer,
+    Signal,
+    Slot,
+)
 from qtpy.QtGui import QCloseEvent, QFont, QGuiApplication, QIcon, QPixmap
-from qtpy.QtStateMachine import QStateMachine
+from qtpy.QtStateMachine import QState, QStateMachine
 from qtpy.QtWidgets import (
     QCheckBox,
     QDialogButtonBox,
@@ -70,6 +79,12 @@ IMDB_YEAR_MIN = 1894
 
 
 class MainWindow(QMainWindow):
+    fieldEdited = Signal()
+    fieldsEmpty = Signal()
+    fieldsDirty = Signal()
+    folderLabelEmpty = Signal()
+    folderLabelGenerated = Signal()
+
     def __init__(
         self,
     ) -> None:
@@ -95,6 +110,7 @@ class MainWindow(QMainWindow):
 
         # Initialize pending operation flag to no flag
         self.pending_operation = PendingOperation(0)
+        self.generated_imdb = ""
 
         self.setupWidgets()
         self.setupStateMachine()
@@ -168,11 +184,13 @@ class MainWindow(QMainWindow):
         self.lastUpdatedTimer.timeout.connect(self.showLastUpdated)
         self.lastUpdatedTimer.start()
 
-        self.titleEdit.textEdited.connect(self.titleEditTextEdited)
-        self.titleEdit.pasted.connect(self.titleEditPasted)
-        self.yearSpinbox.valueChanged.connect(self.yearSpinboxValueChanged)
-        self.imdbEdit.textEdited.connect(self.imdbEditTextEdited)
+        self.titleEdit.textEdited.connect(self.fieldEdited)
+        self.titleEdit.pasted.connect(self.fieldEdited)
+        self.yearSpinbox.valueChanged.connect(self.fieldEdited)
+        self.imdbEdit.textEdited.connect(self.fieldEdited)
         self.imdbEdit.pasted.connect(self.imdbEditPasted)
+
+        self.fieldEdited.connect(self.evaluateWindowFields)
 
         self.setupButtonBox()
 
@@ -189,7 +207,6 @@ class MainWindow(QMainWindow):
         self.aboutButton.setToolTip("Information about the program")
 
         self.resetButton = self.buttonBox.button(QDialogButtonBox.StandardButton.Reset)
-        self.resetButton.clicked.connect(self.resetButtonClicked)
         self.resetButton.setToolTip("Reset")
         self.resetButton.setToolTip("Clear the IMDb, Title and Year values")
 
@@ -268,12 +285,38 @@ class MainWindow(QMainWindow):
         self.operationalHistoryState = HistoryState(
             name="operationalHistoryState", parent=self.operationalState
         )
-        self.readyState = State(name="readyState", parent=self.operationalState)
+        self.readyState = State(
+            name="readyState",
+            childMode=QState.ChildMode.ParallelStates,
+            parent=self.operationalState,
+        )
         self.updateState = State(name="updateState", parent=self.operationalState)
         self.searchDatasetState = State(
             name="searchDatasetState", parent=self.operationalState
         )
         self.addTitleIndexState = State(name="addTitleIndexState")
+
+        self.validationState = State(name="validationState", parent=self.readyState)
+        # fieldsEvaluationState is a Transient Evaluating State whose only purpose is to
+        # determine whether the window's fields are empty or dirty.
+        self.fieldsEvaluationState = State(
+            name="fieldEvaluationState", parent=self.validationState
+        )
+        self.emptyState = State(name="emptyState", parent=self.validationState)
+        self.dirtyState = State(name="dirtyState", parent=self.validationState)
+
+        self.generationState = State(name="generationState", parent=self.readyState)
+        # folderLabelEvaluationState is a Transient Evaluating State whose only purpose
+        # is to determine whether the window's folder label is empty or populated.
+        self.folderLabelEvaluationState = State(
+            name="folderLabelEvaluationState", parent=self.generationState
+        )
+        self.generatedState = State(name="generatedState", parent=self.generationState)
+        self.notGeneratedState = State(
+            name="notGeneratedState", parent=self.generationState
+        )
+
+        self.generateFolderLabelState = State(name="generateFolderLabelState")
         self.copyState = State(name="copyState")
         self.aboutState = State(name="aboutState")
         self.errorState = State(name="errorState")
@@ -288,6 +331,7 @@ class MainWindow(QMainWindow):
         self.machine.addState(self.errorState)
         self.machine.addState(self.resetState)
         self.machine.addState(self.addTitleIndexState)
+        self.machine.addState(self.generateFolderLabelState)
         self.machine.addState(self.copyState)
         self.machine.addState(self.aboutState)
         self.machine.addState(self.finalState)
@@ -323,9 +367,35 @@ class MainWindow(QMainWindow):
         self.readyState.addTransition(
             self.controller.searchDataset, self.searchDatasetState
         )
+        self.validationState.setInitialState(self.fieldsEvaluationState)
+        self.generationState.setInitialState(self.folderLabelEvaluationState)
+
+        self.fieldsEvaluationState.entered.connect(self.evaluateWindowFields)
+        self.fieldsEvaluationState.addTransition(self.fieldsEmpty, self.emptyState)
+        self.fieldsEvaluationState.addTransition(self.fieldsDirty, self.dirtyState)
+        self.emptyState.assignProperty(self.resetButton, "enabled", False)
+        self.dirtyState.assignProperty(self.resetButton, "enabled", True)
+        self.emptyState.assignProperty(self.getButton, "enabled", False)
+        self.dirtyState.assignProperty(self.getButton, "enabled", True)
+        self.emptyState.addTransition(self.fieldsDirty, self.dirtyState)
+        self.dirtyState.addTransition(self.fieldsEmpty, self.emptyState)
+
+        self.folderLabelEvaluationState.entered.connect(self.evaluateFolderLabel)
+        self.folderLabelEvaluationState.addTransition(
+            self.folderLabelEmpty, self.notGeneratedState
+        )
+        self.folderLabelEvaluationState.addTransition(
+            self.folderLabelGenerated, self.generatedState
+        )
+
+        self.notGeneratedState.assignProperty(self.copyButton, "enabled", False)
+        self.generatedState.assignProperty(self.copyButton, "enabled", True)
 
         self.resetState.entered.connect(self.titleEdit.clear)
         self.resetState.entered.connect(self.yearSpinbox.clear)
+        self.resetState.assignProperty(
+            self.yearSpinbox, "value", self.yearSpinbox.minimum()
+        )
         self.resetState.entered.connect(self.imdbEdit.clear)
         self.resetState.entered.connect(self.folderLabel.clear)
         self.resetState.addTransition(self.readyState)
@@ -347,10 +417,13 @@ class MainWindow(QMainWindow):
             self.controller.addTitleIndexError, self.errorState
         )
         self.searchDatasetState.addTransition(
-            self.controller.searchDatasetNothingFound, self.readyState
+            self.controller.searchDatasetTitleNotFound, self.readyState
         )
         self.searchDatasetState.addTransition(
             self.controller.searchDatasetInsufficientData, self.readyState
+        )
+        self.searchDatasetState.addTransition(
+            self.controller.searchDatasetTitleFound, self.generateFolderLabelState
         )
 
         self.addTitleIndexState.entered.connect(self.addTitleIndex)
@@ -367,6 +440,9 @@ class MainWindow(QMainWindow):
             self.controller.addTitleIndexRefused, self.searchDatasetState
         )
 
+        self.generateFolderLabelState.entered.connect(self.generateFolderName)
+        self.generateFolderLabelState.addTransition(self.copyState)
+
         self.copyState.entered.connect(self.copyToClipboard)
         self.copyState.addTransition(self.readyState)
         self.readyState.addTransition(self.controller.copyToClipboard, self.copyState)
@@ -380,6 +456,19 @@ class MainWindow(QMainWindow):
 
         # TODO do something more sophisticated here than merely exit without warning!
         self.errorState.addTransition(self.finalState)
+
+    @Slot()
+    def evaluateWindowFields(self) -> None:
+        empty = (
+            self.yearSpinbox.isEmpty()
+            and not self.titleEdit.text()
+            and not self.imdbEdit.text()
+        )
+        self.fieldsEmpty.emit() if empty else self.fieldsDirty.emit()
+
+    @Slot()
+    def evaluateFolderLabel(self) -> None:
+        self.folderLabelGenerated.emit() if self.folderLabel.text() else self.folderLabelEmpty.emit()
 
     @Slot()
     def updateDataset(self) -> None:
@@ -651,18 +740,22 @@ class MainWindow(QMainWindow):
             text = f"{text} [imdbid-{self.imdbEdit.text()}]"
         self.folderLabel.setText(text)
 
+    def generateFolderName(self) -> None:
+        title = self.titleEdit.text()
+        year = self.yearSpinbox.text()
+
+        text = f"{sanitise_title(title)} ({year})" if year else sanitise_title(title)
+        text = f"{text} [imdbid-{self.imdbEdit.text()}]"
+        self.folderLabel.setText(text)
+
     @Slot(bool)
     def resetButtonClicked(self, checked: bool) -> None:
+        logger.critical("Legacy resetButtonClicked")
+        return
         self.titleEdit.clear()
         self.yearSpinbox.setValue(0)
         self.yearSpinbox.clear()
         self.imdbEdit.clear()
-        self.folderLabel.clear()
-
-    def resetContentsExceptIMDbId(self) -> None:
-        self.titleEdit.clear()
-        self.yearSpinbox.setValue(0)
-        self.yearSpinbox.clear()
         self.folderLabel.clear()
 
     @Slot()
@@ -696,7 +789,7 @@ class MainWindow(QMainWindow):
                 if ret == QMessageBox.StandardButton.Yes:
                     self.controller.update.emit()
                     return
-            self.controller.searchDatasetNothingFound.emit()
+            self.controller.searchDatasetTitleNotFound.emit()
             return
 
         if len(movie_infos) == 1:
@@ -711,27 +804,22 @@ class MainWindow(QMainWindow):
         if movie_info is not None:
             logger.debug("%s (%s)", movie_info.title, movie_info.year)
             self.setMovieInfo(movie_info)
-            self.generateOutput()
-            self.controller.copyToClipboard.emit()
+            self.controller.searchDatasetTitleFound.emit()
         else:
-            self.controller.searchDatasetNothingFound.emit()
+            self.controller.searchDatasetTitleNotFound.emit()
 
     def setMovieInfo(self, movieInfo: MovieInfo) -> None:
-        if movieInfo.title:
-            state = self.titleEdit.blockSignals(True)
+        with QSignalBlocker(self.titleEdit):
             self.titleEdit.setText(movieInfo.title)
-            self.titleEdit.blockSignals(state)
 
-        if movieInfo.year:
-            state = self.yearSpinbox.blockSignals(True)
-            self.yearSpinbox.setValue(movieInfo.year)
-            self.yearSpinbox.blockSignals(state)
+        with QSignalBlocker(self.yearSpinbox):
+            if movieInfo.year:
+                self.yearSpinbox.setValue(movieInfo.year)
+            else:
+                self.yearSpinbox.setValue(self.yearSpinbox.minimum())
 
-        if not self.imdbEdit.text():
-            text = movieInfo.imdb_id
-            state = self.imdbEdit.blockSignals(True)
-            self.imdbEdit.setText(text)
-            self.imdbEdit.blockSignals(state)
+        with QSignalBlocker(self.imdbEdit):
+            self.imdbEdit.setText(movieInfo.imdb_id)
 
     @Slot(Exception)
     def movieInfoException(self, exception: Exception) -> None:

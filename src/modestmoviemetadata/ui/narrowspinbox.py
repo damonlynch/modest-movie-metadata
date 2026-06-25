@@ -35,3 +35,6 @@ class NarrowSpinbox(QSpinBox):
             QStyle.ContentsType.CT_SpinBox, opt, valueSize, self
         )
         return spinboxSize
+
+    def isEmpty(self) -> bool:
+        return self.value() == 0 or self.value() == self.minimum()
