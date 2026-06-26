@@ -1,5 +1,6 @@
 #  SPDX-FileCopyrightText: 2026 Damon Lynch <damonlynch@gmail.com>
 #  SPDX-License-Identifier: GPL-3.0-or-later
+from datetime import datetime
 
 from qtpy.QtCore import QObject, Signal
 from qtpy.QtStateMachine import QFinalState, QHistoryState, QState
@@ -20,7 +21,9 @@ class State(QState):
         self.setObjectName(name)
 
     def onEntry(self, event):
-        logger.debug(f"ENTER: {self.objectName()}")
+        logger.debug(
+            f"ENTER: {self.objectName()} {datetime.now().strftime('%H:%M:%S')}"
+        )
 
     def onExit(self, event):
         logger.debug(f"EXIT: {self.objectName()}")
@@ -33,7 +36,9 @@ class HistoryState(QHistoryState):
         self.setObjectName(name)
 
     def onEntry(self, event):
-        logger.debug(f"ENTER: {self.objectName()}")
+        logger.debug(
+            f"ENTER: {self.objectName()} {datetime.now().strftime('%H:%M:%S')}"
+        )
 
     def onExit(self, event):
         logger.debug(f"EXIT: {self.objectName()}")
@@ -45,7 +50,9 @@ class FinalState(QFinalState):
         self.setObjectName(name)
 
     def onEntry(self, event):
-        logger.debug(f"ENTER: {self.objectName()}")
+        logger.debug(
+            f"ENTER: {self.objectName()} {datetime.now().strftime('%H:%M:%S')}"
+        )
 
     def onExit(self, event):
         logger.debug(f"EXIT: {self.objectName()}")
