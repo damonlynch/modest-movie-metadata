@@ -78,3 +78,5 @@ class StateMachineSignals(QObject):
     addTitleIndexError = Signal()
     doNotCreateDataset = Signal()
     copyToClipboard = Signal()
+    clipboardIrrelevantData = Signal()
+    resetFields = Signal()

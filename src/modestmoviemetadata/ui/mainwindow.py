@@ -98,10 +98,7 @@ class MainWindow(QMainWindow):
         self.controller = StateMachineSignals()
 
         self.clipboard = QGuiApplication.clipboard()
-        self.clipboard.changed.connect(self.clipboardDataChanged)
 
-        # Initialize pending operation flag to no flag
-        self.pending_operation = PendingOperation(0)
         self.generated_imdb = ""
 
         self.setupWidgets()
@@ -180,7 +177,6 @@ class MainWindow(QMainWindow):
         self.titleEdit.pasted.connect(self.fieldEdited)
         self.yearSpinbox.valueChanged.connect(self.fieldEdited)
         self.imdbEdit.textEdited.connect(self.fieldEdited)
-        self.imdbEdit.pasted.connect(self.imdbEditPasted)
 
         self.fieldEdited.connect(self.evaluateWindowFields)
 
@@ -201,6 +197,7 @@ class MainWindow(QMainWindow):
         self.resetButton = self.buttonBox.button(QDialogButtonBox.StandardButton.Reset)
         self.resetButton.setToolTip("Reset")
         self.resetButton.setToolTip("Clear the IMDb, Title and Year values")
+        self.resetButton.clicked.connect(self.controller.resetFields)
 
         self.copyButton = self.buttonBox.button(QDialogButtonBox.StandardButton.Apply)
         self.copyButton.clicked.connect(self.controller.copyToClipboard)
@@ -272,11 +269,11 @@ class MainWindow(QMainWindow):
         self.initializingState = State(name="initializingState")
         self.checkDatabaseState = State(name="checkDatabaseState")
         self.newDatabaseState = State(name="newDatabaseState")
-        self.resetState = State(name="resetState")
         self.operationalState = State(name="operationalState")
         self.operationalHistoryState = HistoryState(
             name="operationalHistoryState", parent=self.operationalState
         )
+        self.resetState = State(name="resetState", parent=self.operationalState)
         self.readyState = State(
             name="readyState",
             childMode=QState.ChildMode.ParallelStates,
@@ -286,13 +283,15 @@ class MainWindow(QMainWindow):
         self.searchDatasetState = State(
             name="searchDatasetState", parent=self.operationalState
         )
-        self.addTitleIndexState = State(name="addTitleIndexState")
+        self.addTitleIndexState = State(
+            name="addTitleIndexState", parent=self.operationalState
+        )
 
         self.validationState = State(name="validationState", parent=self.readyState)
         # fieldsEvaluationState is a Transient Evaluating State whose only purpose is to
         # determine whether the window's fields are empty or dirty.
         self.fieldsEvaluationState = State(
-            name="fieldEvaluationState", parent=self.validationState
+            name="fieldsEvaluationState", parent=self.validationState
         )
         self.emptyState = State(name="emptyState", parent=self.validationState)
         self.dirtyState = State(name="dirtyState", parent=self.validationState)
@@ -309,6 +308,11 @@ class MainWindow(QMainWindow):
         )
 
         self.generateFolderLabelState = State(name="generateFolderLabelState")
+
+        self.clipboardChangedState = State(
+            name="clipboardChangedState", parent=self.operationalState
+        )
+
         self.copyState = State(name="copyState")
         self.aboutState = State(name="aboutState")
         self.errorState = State(name="errorState")
@@ -321,8 +325,6 @@ class MainWindow(QMainWindow):
         self.machine.addState(self.newDatabaseState)
         self.machine.addState(self.operationalState)
         self.machine.addState(self.errorState)
-        self.machine.addState(self.resetState)
-        self.machine.addState(self.addTitleIndexState)
         self.machine.addState(self.generateFolderLabelState)
         self.machine.addState(self.copyState)
         self.machine.addState(self.aboutState)
@@ -383,15 +385,9 @@ class MainWindow(QMainWindow):
         self.notGeneratedState.assignProperty(self.copyButton, "enabled", False)
         self.generatedState.assignProperty(self.copyButton, "enabled", True)
 
-        self.resetState.entered.connect(self.titleEdit.clear)
-        self.resetState.entered.connect(self.yearSpinbox.clear)
-        self.resetState.assignProperty(
-            self.yearSpinbox, "value", self.yearSpinbox.minimum()
-        )
-        self.resetState.entered.connect(self.imdbEdit.clear)
-        self.resetState.entered.connect(self.folderLabel.clear)
-        self.resetState.addTransition(self.readyState)
-        self.readyState.addTransition(self.resetButton.clicked, self.resetState)
+        self.readyState.addTransition(self.controller.resetFields, self.resetState)
+        self.resetState.entered.connect(self.resetFields)
+        self.resetState.addTransition(self.operationalState)
 
         self.updateState.entered.connect(self.updateDataset)
 
@@ -446,6 +442,17 @@ class MainWindow(QMainWindow):
         self.aboutState.addTransition(self.readyState)
         self.readyState.addTransition(self.aboutButton.clicked, self.aboutState)
 
+        self.readyState.addTransition(
+            self.clipboard.changed, self.clipboardChangedState
+        )
+        self.clipboardChangedState.entered.connect(self.clipboardDataChanged)
+        self.clipboardChangedState.addTransition(
+            self.controller.searchDataset, self.searchDatasetState
+        )
+        self.clipboardChangedState.addTransition(
+            self.controller.clipboardIrrelevantData, self.readyState
+        )
+
         # TODO do something more sophisticated here than merely exit without warning!
         self.errorState.addTransition(self.finalState)
 
@@ -498,8 +505,6 @@ class MainWindow(QMainWindow):
                 "The most recent dataset has already been downloaded.",
             )
         elif data:
-            # Set flag to indicate the dataset has been converted
-            self.pending_operation |= PendingOperation.INFORM_DATASET_CONVERTED
             self.settings.setValue("Last_Modified", data)
             self.settings.setValue("Last_Updated", datetime.now().isoformat())
 
@@ -507,17 +512,16 @@ class MainWindow(QMainWindow):
     def updateComplete(self) -> None:
         logger.debug("closing progress dialog")
         self.progressDialog.reset()
-        # TODO Consider making a state out of this function
         self.showLastUpdated()
         self.controller.updateFinished.emit()
-        # TODO do a search if one is pending
 
     @Slot()
     def updateError(self, exception: Exception) -> None:
         logger.error("Error updating dataset")
         logger.error("%s", exception)
         QMessageBox.critical(self, "Error updating dataset", str(exception))
-        # TODO reset the progress window, perhaps by using a state
+        if hasattr(self, "progressDialog"):
+            self.progressDialog.reset()
         self.controller.updateError.emit()
 
     @Slot()
@@ -643,9 +647,19 @@ class MainWindow(QMainWindow):
         text = get_imdb(self.clipboard.text())
         if text and text != self.imdbEdit.text():
             logger.debug("IMDb id %s detected in clipboard", text)
-            self.resetButtonClicked(False)
+            self.resetFields()
             self.imdbEdit.setText(text)
             self.controller.searchDataset.emit()
+        else:
+            self.controller.clipboardIrrelevantData.emit()
+
+    @Slot()
+    def resetFields(self) -> None:
+        logger.debug("Resetting fields")
+        self.titleEdit.clear()
+        self.yearSpinbox.setValue(self.yearSpinbox.minimum())
+        self.imdbEdit.clear()
+        self.folderLabel.clear()
 
     @Slot()
     def checkDatabase(self) -> None:
@@ -689,49 +703,6 @@ class MainWindow(QMainWindow):
             # Allow for Internet connection problems: prompt again
             self.newDatabaseSizeResult(0)
 
-    @Slot(str)
-    def titleEditTextEdited(self, text: str) -> None:
-        self.generateOutput()
-
-    @Slot()
-    def titleEditPasted(self) -> None:
-        text = self.titleEdit.text()
-        self.resetButtonClicked(False)
-        self.titleEdit.setText(text)
-
-    @Slot()
-    def imdbEditPasted(self) -> None:
-        text = self.imdbEdit.text()  # type:str
-        self.resetButtonClicked(False)
-        self.imdbEdit.setText(text)
-        if text.startswith("tt") and len(text) > 2 and text[2:].isdigit():
-            self.controller.searchDataset.emit()
-
-    @Slot(int)
-    def yearSpinboxValueChanged(self, value: int) -> None:
-        self.generateOutput()
-
-    @Slot(str)
-    def imdbEditTextEdited(self, text: str) -> None:
-        ic(text)
-        if not text.startswith("tt"):
-            text = get_imdb(text)
-            if text:
-                self.imdbEdit.setText(text)
-        self.generateOutput()
-
-    def generateOutput(self) -> None:
-        title = self.titleEdit.text()
-        year = self.yearSpinbox.text()
-        if not (title and year):
-            self.folderLabel.clear()
-            return
-
-        text = f"{sanitise_title(title)} ({year})"
-        if self.imdbEdit.text():
-            text = f"{text} [imdbid-{self.imdbEdit.text()}]"
-        self.folderLabel.setText(text)
-
     def generateFolderName(self) -> None:
         title = self.titleEdit.text()
         year = self.yearSpinbox.text()
@@ -739,16 +710,6 @@ class MainWindow(QMainWindow):
         text = f"{sanitise_title(title)} ({year})" if year else sanitise_title(title)
         text = f"{text} [imdbid-{self.imdbEdit.text()}]"
         self.folderLabel.setText(text)
-
-    @Slot(bool)
-    def resetButtonClicked(self, checked: bool) -> None:
-        logger.critical("Legacy resetButtonClicked")
-        return
-        self.titleEdit.clear()
-        self.yearSpinbox.setValue(0)
-        self.yearSpinbox.clear()
-        self.imdbEdit.clear()
-        self.folderLabel.clear()
 
     @Slot()
     def showLastUpdated(self) -> None:
