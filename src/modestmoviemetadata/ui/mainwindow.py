@@ -2,13 +2,11 @@
 #  SPDX-License-Identifier: GPL-3.0-or-later
 
 from datetime import datetime, timedelta
-from enum import Flag, auto
 from typing import cast
 
 import arrow
 from qtpy.QtCore import (
     QSettings,
-    QSignalBlocker,
     QSize,
     Qt,
     QThreadPool,
@@ -67,12 +65,6 @@ from modestmoviemetadata.ui.state import (
 )
 
 logger = get_logger()
-
-
-class PendingOperation(Flag):
-    TITLE_SEARCH = auto()
-    IMDB_ID_SEARCH = auto()
-    INFORM_DATASET_CONVERTED = auto()
 
 
 IMDB_YEAR_MIN = 1894
@@ -809,17 +801,14 @@ class MainWindow(QMainWindow):
             self.controller.searchDatasetTitleNotFound.emit()
 
     def setMovieInfo(self, movieInfo: MovieInfo) -> None:
-        with QSignalBlocker(self.titleEdit):
-            self.titleEdit.setText(movieInfo.title)
+        self.titleEdit.setText(movieInfo.title)
 
-        with QSignalBlocker(self.yearSpinbox):
-            if movieInfo.year:
-                self.yearSpinbox.setValue(movieInfo.year)
-            else:
-                self.yearSpinbox.setValue(self.yearSpinbox.minimum())
+        if movieInfo.year:
+            self.yearSpinbox.setValue(movieInfo.year)
+        else:
+            self.yearSpinbox.setValue(self.yearSpinbox.minimum())
 
-        with QSignalBlocker(self.imdbEdit):
-            self.imdbEdit.setText(movieInfo.imdb_id)
+        self.imdbEdit.setText(movieInfo.imdb_id)
 
     @Slot(Exception)
     def movieInfoException(self, exception: Exception) -> None:
