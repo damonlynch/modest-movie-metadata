@@ -39,18 +39,11 @@ def fetch_movie_info(
 
     else:
         try:
-            movies = query_by_title(title)
+            movies = query_by_title(title, year)
         except Exception as inst:
             ic(inst)
         else:
-            if not year:
-                return [MovieInfo(*movie) for movie in movies]
-            else:
-                return [
-                    MovieInfo(*movie)
-                    for movie in movies
-                    if year - 1 <= movie[1] <= year + 1
-                ]
+            return [MovieInfo(*movie) for movie in movies]
 
 
 def make_imdb_url(imdb_id: str) -> str:

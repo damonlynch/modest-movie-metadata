@@ -24,6 +24,11 @@ from modestmoviemetadata.tools.utilities import format_bytes
 
 logger = get_logger()
 
+TABLE_INDICES = {
+    "title": ("ix_titles_primary_title", "primary_title"),
+    "title year": ("ix_titles_primary_title_premiered", "primary_title, premiered"),
+}
+
 
 def convert_last_modified_header(web_mtime: str) -> datetime:
     """
@@ -151,44 +156,63 @@ def query_by_imdb_id(imdb_id: str) -> tuple[str, int] | None:
         return row
 
 
-def query_by_title(title: str) -> list[tuple[str, int, str]]:
+def query_by_title(title: str, year: int | None) -> list[tuple[str, int, str]]:
     with closing(sqlite3.connect(imdb_db_path())) as conn:
         c = conn.cursor()
         formatted_search = f"%{title}%"
-        # Convert NULL years to 0, which is important when comparing years via
-        # integer comparison
-        c.execute(
-            """
-            SELECT primary_title, IFNULL(premiered, 0), title_id FROM titles 
-            WHERE primary_title LIKE ?
-            """,
-            (formatted_search,),
-        )
+        if year is not None:
+            # Search by title, with no year.
+            # Convert NULL years to 0, which is important when comparing years via
+            # integer comparison
+            c.execute(
+                """
+                SELECT primary_title, IFNULL(premiered, 0), title_id FROM titles 
+                WHERE primary_title LIKE ?
+                """,
+                (formatted_search,),
+            )
+        else:
+            # Search by title and year
+            c.execute(
+                """
+                SELECT primary_title, premiered, title_id FROM titles 
+                WHERE primary_title LIKE ? AND 
+                premiered BETWEEN ? - 1 AND ? + 1; 
+                """,
+                (formatted_search, year, year),
+            )
         rows = c.fetchall()
         return rows
 
 
-def title_index_exists() -> bool:
+def table_index_exists() -> bool:
     with closing(sqlite3.connect(imdb_db_path())) as conn:
         c = conn.cursor()
         c.execute(
             """
             SELECT 1 FROM sqlite_master WHERE type = 'index' AND 
-            name = 'ix_titles_primary_title';
+            name = 'ix_titles_primary_title_premiered';
             """,
         )
         row = c.fetchone()
         return row is not None
 
 
-def create_title_index(progress_callback: SignalInstance):
-    logger.debug("Creating title_index")
+def create_table_index(progress_callback: SignalInstance):
+    """
+    Adds a new index to the table, consisting of the primary title and premiered
+    (year) fields. Because the primary title field is first, the index also functions
+    as an index for searching by title only.
+    """
+    logger.debug(
+        "Creating title year index",
+    )
     with closing(sqlite3.connect(imdb_db_path())) as conn:
         c = conn.cursor()
         c.execute(
             """
-            CREATE INDEX IF NOT EXISTS ix_titles_primary_title 
-            ON titles(primary_title);
-            """,
+            CREATE INDEX IF NOT EXISTS 'ix_titles_primary_title_premiered' 
+            ON titles(primary_title, premiered);
+            """
         )
-    logger.debug("title_index created")
+    logger.debug("title year index created")

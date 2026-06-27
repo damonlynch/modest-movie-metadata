@@ -32,11 +32,11 @@ from qtpy.QtWidgets import (
 from modestmoviemetadata.config import application_name
 from modestmoviemetadata.tools.audiotools import play_sound
 from modestmoviemetadata.tools.database import (
-    create_title_index,
+    create_table_index,
     database_exists,
     dataset_downward_size,
     download_and_convert,
-    title_index_exists,
+    table_index_exists,
 )
 from modestmoviemetadata.tools.filetools import program_appdata_directory
 from modestmoviemetadata.tools.logtools import get_logger
@@ -537,7 +537,9 @@ class MainWindow(QMainWindow):
             return
 
         if not imdb_id and title:
-            if not title_index_exists():
+            # if year is not None:
+
+            if not table_index_exists():
                 self.controller.addTitleIndex.emit()
                 return
 
@@ -579,8 +581,8 @@ class MainWindow(QMainWindow):
             msgBox = QMessageBox(parent=self)
             msgBox.setWindowTitle("Database Optimization")
             msgBox.setText(
-                "Searching by title requires additional database optimization to "
-                "improve speed. This process may take a few minutes.\n\n"
+                "This search requires additional database optimization to "
+                "improve search speed. This process may take a few minutes.\n\n"
                 "Do you agree?\n"
             )
             msgBox.setIcon(QMessageBox.Icon.Question)
@@ -614,7 +616,7 @@ class MainWindow(QMainWindow):
         self.progressDialog.setWindowModality(Qt.WindowModality.WindowModal)
         self.progressDialog.setAutoReset(False)
 
-        worker = Worker(create_title_index)
+        worker = Worker(create_table_index)
         worker.signals.finished.connect(self.addTitleIndexFinished)
         worker.signals.error.connect(self.addTitleIndexException)
         self.threadpool.start(worker)
