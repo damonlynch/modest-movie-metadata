@@ -151,6 +151,7 @@ class AboutDialog(QDialog):
 
         credits_text = f"""
         {copyright_message}
+        IMDb dataset conversion copyright &copy; 2018 Jonas Tingeborn.
 
         Photo {photolink} copyright © 2023 Damon Lynch, all rights reserved.
         
