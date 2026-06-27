@@ -801,10 +801,9 @@ class MainWindow(QMainWindow):
             if self.promptForDatasetUpdate():
                 ret = QMessageBox.question(
                     self,
-                    "Update local database?",
-                    "The IMDb id is not found in the local database.\n\n"
-                    "Do you want to update the local database using the latest "
-                    "IMDb dataset?",
+                    "Update local dataset?",
+                    "The IMDb id is not found in the dataset.\n\n"
+                    "Do you want to update to the latest IMDb dataset?",
                 )
                 self.settings.setValue("Last_Prompted", datetime.now().isoformat())
                 if ret == QMessageBox.StandardButton.Yes:
