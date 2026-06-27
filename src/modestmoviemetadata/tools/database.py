@@ -160,7 +160,7 @@ def query_by_title(title: str, year: int | None) -> list[tuple[str, int, str]]:
     with closing(sqlite3.connect(imdb_db_path())) as conn:
         c = conn.cursor()
         formatted_search = f"%{title}%"
-        if year is not None:
+        if year is None:
             # Search by title, with no year.
             # Convert NULL years to 0, which is important when comparing years via
             # integer comparison
