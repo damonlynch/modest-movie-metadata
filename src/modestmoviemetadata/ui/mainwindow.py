@@ -73,7 +73,7 @@ IMDB_YEAR_MIN = 1894
 class MainWindow(QMainWindow):
     fieldEdited = Signal()
     fieldsEmpty = Signal()
-    fieldsDirty = Signal()
+    fieldsNotEmpty = Signal()
     folderLabelEmpty = Signal()
     folderLabelGenerated = Signal()
 
@@ -178,7 +178,7 @@ class MainWindow(QMainWindow):
         self.yearSpinbox.valueChanged.connect(self.fieldEdited)
         self.imdbEdit.textEdited.connect(self.fieldEdited)
 
-        self.fieldEdited.connect(self.evaluateWindowFields)
+        self.fieldEdited.connect(self.evaluateInputFields)
 
         self.setupButtonBox()
 
@@ -287,14 +287,20 @@ class MainWindow(QMainWindow):
             name="addTitleIndexState", parent=self.operationalState
         )
 
-        self.validationState = State(name="validationState", parent=self.readyState)
-        # fieldsEvaluationState is a Transient Evaluating State whose only purpose is to
-        # determine whether the window's fields are empty or dirty.
-        self.fieldsEvaluationState = State(
-            name="fieldsEvaluationState", parent=self.validationState
+        # Track whether any input fields contain data, which is used for
+        # determining whether the reset button should be enabled
+        self.inputFieldsRegionState = State(
+            name="validationState", parent=self.readyState
         )
-        self.emptyState = State(name="emptyState", parent=self.validationState)
-        self.dirtyState = State(name="dirtyState", parent=self.validationState)
+        # inputFieldsEvaluationState is a Transient Evaluating State whose only purpose
+        # is to determine whether the window's fields are empty or not empty.
+        self.inputFieldsEvaluationState = State(
+            name="inputFieldsEvaluationState", parent=self.inputFieldsRegionState
+        )
+        self.emptyState = State(name="emptyState", parent=self.inputFieldsRegionState)
+        self.notEmptyState = State(
+            name="notEmptyState", parent=self.inputFieldsRegionState
+        )
 
         self.generationState = State(name="generationState", parent=self.readyState)
         # folderLabelEvaluationState is a Transient Evaluating State whose only purpose
@@ -361,18 +367,20 @@ class MainWindow(QMainWindow):
         self.readyState.addTransition(
             self.controller.searchDataset, self.searchDatasetState
         )
-        self.validationState.setInitialState(self.fieldsEvaluationState)
+        self.inputFieldsRegionState.setInitialState(self.inputFieldsEvaluationState)
         self.generationState.setInitialState(self.folderLabelEvaluationState)
 
-        self.fieldsEvaluationState.entered.connect(self.evaluateWindowFields)
-        self.fieldsEvaluationState.addTransition(self.fieldsEmpty, self.emptyState)
-        self.fieldsEvaluationState.addTransition(self.fieldsDirty, self.dirtyState)
+        self.inputFieldsEvaluationState.entered.connect(self.evaluateInputFields)
+        self.inputFieldsEvaluationState.addTransition(self.fieldsEmpty, self.emptyState)
+        self.inputFieldsEvaluationState.addTransition(
+            self.fieldsNotEmpty, self.notEmptyState
+        )
         self.emptyState.assignProperty(self.resetButton, "enabled", False)
-        self.dirtyState.assignProperty(self.resetButton, "enabled", True)
+        self.notEmptyState.assignProperty(self.resetButton, "enabled", True)
         self.emptyState.assignProperty(self.getButton, "enabled", False)
-        self.dirtyState.assignProperty(self.getButton, "enabled", True)
-        self.emptyState.addTransition(self.fieldsDirty, self.dirtyState)
-        self.dirtyState.addTransition(self.fieldsEmpty, self.emptyState)
+        self.notEmptyState.assignProperty(self.getButton, "enabled", True)
+        self.emptyState.addTransition(self.fieldsNotEmpty, self.notEmptyState)
+        self.notEmptyState.addTransition(self.fieldsEmpty, self.emptyState)
 
         self.folderLabelEvaluationState.entered.connect(self.evaluateFolderLabel)
         self.folderLabelEvaluationState.addTransition(
@@ -457,13 +465,13 @@ class MainWindow(QMainWindow):
         self.errorState.addTransition(self.finalState)
 
     @Slot()
-    def evaluateWindowFields(self) -> None:
+    def evaluateInputFields(self) -> None:
         empty = (
             self.yearSpinbox.isEmpty()
             and not self.titleEdit.text()
             and not self.imdbEdit.text()
         )
-        self.fieldsEmpty.emit() if empty else self.fieldsDirty.emit()
+        self.fieldsEmpty.emit() if empty else self.fieldsNotEmpty.emit()
 
     @Slot()
     def evaluateFolderLabel(self) -> None:
