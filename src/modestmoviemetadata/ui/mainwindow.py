@@ -71,11 +71,13 @@ IMDB_YEAR_MIN = 1894
 
 
 class MainWindow(QMainWindow):
-    fieldEdited = Signal()
-    fieldsEmpty = Signal()
-    fieldsNotEmpty = Signal()
+    inputFieldEdited = Signal()
+    inputFieldsEmpty = Signal()
+    inputFieldsNotEmpty = Signal()
     folderLabelEmpty = Signal()
     folderLabelGenerated = Signal()
+    datasetSearchPossible = Signal()
+    datasetSearchImpossible = Signal()
 
     def __init__(
         self,
@@ -173,12 +175,13 @@ class MainWindow(QMainWindow):
         self.lastUpdatedTimer.timeout.connect(self.showLastUpdated)
         self.lastUpdatedTimer.start()
 
-        self.titleEdit.textEdited.connect(self.fieldEdited)
-        self.titleEdit.pasted.connect(self.fieldEdited)
-        self.yearSpinbox.valueChanged.connect(self.fieldEdited)
-        self.imdbEdit.textEdited.connect(self.fieldEdited)
+        self.titleEdit.textEdited.connect(self.inputFieldEdited)
+        self.titleEdit.pasted.connect(self.inputFieldEdited)
+        self.yearSpinbox.valueChanged.connect(self.inputFieldEdited)
+        self.imdbEdit.textEdited.connect(self.inputFieldEdited)
 
-        self.fieldEdited.connect(self.evaluateInputFields)
+        self.inputFieldEdited.connect(self.evaluateInputFields)
+        self.inputFieldEdited.connect(self.evaluateDatasetSearchPossible)
 
         self.setupButtonBox()
 
@@ -261,7 +264,7 @@ class MainWindow(QMainWindow):
 
         self.createStates()
         self.configureStateMachine()
-        self.configureStates()
+        self.configureStateTransitions()
 
         self.machine.start()
 
@@ -290,7 +293,7 @@ class MainWindow(QMainWindow):
         # Track whether any input fields contain data, which is used for
         # determining whether the reset button should be enabled
         self.inputFieldsRegionState = State(
-            name="validationState", parent=self.readyState
+            name="inputFieldsRegionState", parent=self.readyState
         )
         # inputFieldsEvaluationState is a Transient Evaluating State whose only purpose
         # is to determine whether the window's fields are empty or not empty.
@@ -316,6 +319,22 @@ class MainWindow(QMainWindow):
         )
         self.notGeneratedState = State(
             name="notGeneratedState", parent=self.generationRegionState
+        )
+
+        self.searchDatasetPossibleRegionState = State(
+            name="searchDatasetPossibleRegionState", parent=self.readyState
+        )
+        self.searchDatasetPossibleEvaluationState = State(
+            name="searchDatasetPossibleEvaluationState",
+            parent=self.searchDatasetPossibleRegionState,
+        )
+        self.searchDatasetPossibleState = State(
+            name="searchDatasetPossibleState",
+            parent=self.searchDatasetPossibleRegionState,
+        )
+        self.searchDatasetImpossibleState = State(
+            name="searchDatasetImpossibleState",
+            parent=self.searchDatasetPossibleRegionState,
         )
 
         self.generateFolderLabelState = State(name="generateFolderLabelState")
@@ -344,7 +363,7 @@ class MainWindow(QMainWindow):
         self.machine.setInitialState(self.initializingState)
         self.machine.finished.connect(self.close)
 
-    def configureStates(self) -> None:
+    def configureStateTransitions(self) -> None:
 
         # Check database state at start-up
         self.initializingState.addTransition(
@@ -374,18 +393,21 @@ class MainWindow(QMainWindow):
         )
         self.inputFieldsRegionState.setInitialState(self.inputFieldsEvaluationState)
         self.generationRegionState.setInitialState(self.generationEvaluationState)
+        self.searchDatasetPossibleRegionState.setInitialState(
+            self.searchDatasetPossibleEvaluationState
+        )
 
         self.inputFieldsEvaluationState.entered.connect(self.evaluateInputFields)
-        self.inputFieldsEvaluationState.addTransition(self.fieldsEmpty, self.emptyState)
         self.inputFieldsEvaluationState.addTransition(
-            self.fieldsNotEmpty, self.notEmptyState
+            self.inputFieldsEmpty, self.emptyState
+        )
+        self.inputFieldsEvaluationState.addTransition(
+            self.inputFieldsNotEmpty, self.notEmptyState
         )
         self.emptyState.assignProperty(self.resetButton, "enabled", False)
         self.notEmptyState.assignProperty(self.resetButton, "enabled", True)
-        self.emptyState.assignProperty(self.getButton, "enabled", False)
-        self.notEmptyState.assignProperty(self.getButton, "enabled", True)
-        self.emptyState.addTransition(self.fieldsNotEmpty, self.notEmptyState)
-        self.notEmptyState.addTransition(self.fieldsEmpty, self.emptyState)
+        self.emptyState.addTransition(self.inputFieldsNotEmpty, self.notEmptyState)
+        self.notEmptyState.addTransition(self.inputFieldsEmpty, self.emptyState)
 
         self.generationEvaluationState.entered.connect(self.evaluateFolderLabel)
         self.generationEvaluationState.addTransition(
@@ -397,6 +419,26 @@ class MainWindow(QMainWindow):
 
         self.notGeneratedState.assignProperty(self.copyButton, "enabled", False)
         self.generatedState.assignProperty(self.copyButton, "enabled", True)
+
+        self.searchDatasetPossibleEvaluationState.entered.connect(
+            self.evaluateDatasetSearchPossible
+        )
+        self.searchDatasetPossibleEvaluationState.addTransition(
+            self.datasetSearchPossible, self.searchDatasetPossibleState
+        )
+        self.searchDatasetPossibleEvaluationState.addTransition(
+            self.datasetSearchImpossible, self.searchDatasetImpossibleState
+        )
+        self.searchDatasetPossibleState.assignProperty(self.getButton, "enabled", True)
+        self.searchDatasetImpossibleState.assignProperty(
+            self.getButton, "enabled", False
+        )
+        self.searchDatasetPossibleState.addTransition(
+            self.datasetSearchImpossible, self.searchDatasetImpossibleState
+        )
+        self.searchDatasetImpossibleState.addTransition(
+            self.datasetSearchPossible, self.searchDatasetPossibleState
+        )
 
         self.readyState.addTransition(self.controller.resetFields, self.resetState)
         self.resetState.entered.connect(self.resetFields)
@@ -473,14 +515,25 @@ class MainWindow(QMainWindow):
     def evaluateInputFields(self) -> None:
         empty = (
             self.yearSpinbox.isEmpty()
-            and not self.titleEdit.text()
-            and not self.imdbEdit.text()
+            and not self.titleEdit.text().strip()
+            and not self.imdbEdit.text().strip()
         )
-        self.fieldsEmpty.emit() if empty else self.fieldsNotEmpty.emit()
+        self.inputFieldsEmpty.emit() if empty else self.inputFieldsNotEmpty.emit()
 
     @Slot()
     def evaluateFolderLabel(self) -> None:
-        self.folderLabelGenerated.emit() if self.folderLabel.text() else self.folderLabelEmpty.emit()
+        if self.folderLabel.text():
+            self.folderLabelGenerated.emit()
+        else:
+            self.folderLabelEmpty.emit()
+
+    @Slot()
+    def evaluateDatasetSearchPossible(self) -> None:
+        possible = self.titleEdit.text().strip() or self.imdbEdit.text().strip()
+        if possible:
+            self.datasetSearchPossible.emit()
+        else:
+            self.datasetSearchImpossible.emit()
 
     @Slot()
     def updateDataset(self) -> None:
