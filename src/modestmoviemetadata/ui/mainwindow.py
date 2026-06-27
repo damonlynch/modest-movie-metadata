@@ -302,15 +302,20 @@ class MainWindow(QMainWindow):
             name="notEmptyState", parent=self.inputFieldsRegionState
         )
 
-        self.generationState = State(name="generationState", parent=self.readyState)
+        # Track whether the window's folder label is empty or populated
+        self.generationRegionState = State(
+            name="generationRegionState", parent=self.readyState
+        )
         # folderLabelEvaluationState is a Transient Evaluating State whose only purpose
         # is to determine whether the window's folder label is empty or populated.
-        self.folderLabelEvaluationState = State(
-            name="folderLabelEvaluationState", parent=self.generationState
+        self.generationEvaluationState = State(
+            name="generationEvaluationState", parent=self.generationRegionState
         )
-        self.generatedState = State(name="generatedState", parent=self.generationState)
+        self.generatedState = State(
+            name="generatedState", parent=self.generationRegionState
+        )
         self.notGeneratedState = State(
-            name="notGeneratedState", parent=self.generationState
+            name="notGeneratedState", parent=self.generationRegionState
         )
 
         self.generateFolderLabelState = State(name="generateFolderLabelState")
@@ -368,7 +373,7 @@ class MainWindow(QMainWindow):
             self.controller.searchDataset, self.searchDatasetState
         )
         self.inputFieldsRegionState.setInitialState(self.inputFieldsEvaluationState)
-        self.generationState.setInitialState(self.folderLabelEvaluationState)
+        self.generationRegionState.setInitialState(self.generationEvaluationState)
 
         self.inputFieldsEvaluationState.entered.connect(self.evaluateInputFields)
         self.inputFieldsEvaluationState.addTransition(self.fieldsEmpty, self.emptyState)
@@ -382,11 +387,11 @@ class MainWindow(QMainWindow):
         self.emptyState.addTransition(self.fieldsNotEmpty, self.notEmptyState)
         self.notEmptyState.addTransition(self.fieldsEmpty, self.emptyState)
 
-        self.folderLabelEvaluationState.entered.connect(self.evaluateFolderLabel)
-        self.folderLabelEvaluationState.addTransition(
+        self.generationEvaluationState.entered.connect(self.evaluateFolderLabel)
+        self.generationEvaluationState.addTransition(
             self.folderLabelEmpty, self.notGeneratedState
         )
-        self.folderLabelEvaluationState.addTransition(
+        self.generationEvaluationState.addTransition(
             self.folderLabelGenerated, self.generatedState
         )
 
