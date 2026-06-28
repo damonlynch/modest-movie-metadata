@@ -74,6 +74,7 @@ class MainWindow(QMainWindow):
     inputFieldEdited = Signal()
     inputFieldsEmpty = Signal()
     inputFieldsNotEmpty = Signal()
+    imdbIdDiffers = Signal()
     folderLabelEmpty = Signal()
     folderLabelGenerated = Signal()
     datasetSearchPossible = Signal()
@@ -101,7 +102,8 @@ class MainWindow(QMainWindow):
 
         self.clipboard = QGuiApplication.clipboard()
 
-        self.generated_imdb = ""
+        # Record which IMDb ID is associated with generated Movie/TV show information
+        self.generated_imdb_id = ""
 
         self.setupWidgets()
         self.setupStateMachine()
@@ -109,6 +111,9 @@ class MainWindow(QMainWindow):
 
         self.centralWidget().setEnabled(False)
         self.show()
+        # The state machine is not started until the initialization process for this
+        # class is finished. Must emit a signal to move to the next state in the state
+        # machine.
         QTimer.singleShot(0, self.controller.machineInitialized.emit)
         self.validateConfigDirectory()
 
@@ -419,6 +424,7 @@ class MainWindow(QMainWindow):
 
         self.notGeneratedState.assignProperty(self.copyButton, "enabled", False)
         self.generatedState.assignProperty(self.copyButton, "enabled", True)
+        self.generatedState.addTransition(self.imdbIdDiffers, self.notGeneratedState)
 
         self.searchDatasetPossibleEvaluationState.entered.connect(
             self.evaluateDatasetSearchPossible
@@ -520,6 +526,11 @@ class MainWindow(QMainWindow):
         )
         self.inputFieldsEmpty.emit() if empty else self.inputFieldsNotEmpty.emit()
 
+        if self.generated_imdb_id != self.imdbEdit.text().strip():
+            self.folderLabel.clear()
+            self.generated_imdb_id = ""
+            self.imdbIdDiffers.emit()
+
     @Slot()
     def evaluateFolderLabel(self) -> None:
         if self.folderLabel.text():
@@ -529,8 +540,13 @@ class MainWindow(QMainWindow):
 
     @Slot()
     def evaluateDatasetSearchPossible(self) -> None:
-        possible = self.titleEdit.text().strip() or self.imdbEdit.text().strip()
-        if possible:
+        imdb = self.imdbEdit.text().strip()
+        title = self.titleEdit.text().strip()
+
+        have_text = bool(title or imdb)
+        imdb_matches = imdb and imdb == self.generated_imdb_id
+
+        if have_text and not imdb_matches:
             self.datasetSearchPossible.emit()
         else:
             self.datasetSearchImpossible.emit()
@@ -728,6 +744,7 @@ class MainWindow(QMainWindow):
         self.yearSpinbox.setValue(self.yearSpinbox.minimum())
         self.imdbEdit.clear()
         self.folderLabel.clear()
+        self.generated_imdb_id = ""
 
     @Slot()
     def checkDatabase(self) -> None:
@@ -837,6 +854,7 @@ class MainWindow(QMainWindow):
             self.yearSpinbox.setValue(self.yearSpinbox.minimum())
 
         self.imdbEdit.setText(movieInfo.imdb_id)
+        self.generated_imdb_id = movieInfo.imdb_id
 
     @Slot(Exception)
     def movieInfoException(self, exception: Exception) -> None:
