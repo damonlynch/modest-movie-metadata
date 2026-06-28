@@ -831,9 +831,10 @@ class MainWindow(QMainWindow):
 
         if len(movie_infos) == 1:
             movie_info = movie_infos[0]
+            self.playSound("brrr.mp3")
 
         elif len(movie_infos) > 1:
-            self.playSound("brrr.mp3")
+            self.playSound("click.mp3")
             selectRecord = SelectRecord(movie_infos=movie_infos, parent=self)
             if selectRecord.exec():
                 movie_info = movie_infos[selectRecord.row]
@@ -867,8 +868,9 @@ class MainWindow(QMainWindow):
 
     @Slot(str)
     def playSound(self, sound: str) -> None:
-        logger.debug("Using Qt to play audio")
-        play_sound(soundfile=sound)
+        if not self.isActiveWindow():
+            logger.debug("Using Qt to play audio")
+            play_sound(soundfile=sound)
 
     def convertTimeFromIsoFormat(self, setting: str) -> datetime | None:
         iso_format = cast(str, self.settings.value(setting, ""))
