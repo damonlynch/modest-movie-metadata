@@ -350,7 +350,6 @@ class MainWindow(QMainWindow):
 
         self.copyState = State(name="copyState")
         self.aboutState = State(name="aboutState")
-        self.errorState = State(name="errorState")
         self.finalState = FinalState(name="finalState")
 
     def configureStateMachine(self) -> None:
@@ -359,7 +358,6 @@ class MainWindow(QMainWindow):
         self.machine.addState(self.checkDatabaseState)
         self.machine.addState(self.newDatabaseState)
         self.machine.addState(self.operationalState)
-        self.machine.addState(self.errorState)
         self.machine.addState(self.generateFolderLabelState)
         self.machine.addState(self.copyState)
         self.machine.addState(self.aboutState)
@@ -455,7 +453,9 @@ class MainWindow(QMainWindow):
         self.updateState.addTransition(
             self.controller.updateFinished, self.operationalHistoryState
         )
-        self.updateState.addTransition(self.controller.updateError, self.errorState)
+        self.updateState.addTransition(
+            self.controller.updateError, self.checkDatabaseState
+        )
 
         self.searchDatasetState.entered.connect(self.searchDataset)
         self.searchDatasetState.addTransition(self.controller.update, self.updateState)
@@ -463,7 +463,7 @@ class MainWindow(QMainWindow):
             self.controller.addTitleIndex, self.addTitleIndexState
         )
         self.searchDatasetState.addTransition(
-            self.controller.addTitleIndexError, self.errorState
+            self.controller.addTitleIndexError, self.checkDatabaseState
         )
         self.searchDatasetState.addTransition(
             self.controller.searchDatasetTitleNotFound, self.readyState
@@ -473,6 +473,9 @@ class MainWindow(QMainWindow):
         )
         self.searchDatasetState.addTransition(
             self.controller.searchDatasetTitleFound, self.generateFolderLabelState
+        )
+        self.searchDatasetState.addTransition(
+            self.controller.searchDatasetError, self.checkDatabaseState
         )
 
         self.addTitleIndexState.entered.connect(self.addTitleIndex)
@@ -513,9 +516,6 @@ class MainWindow(QMainWindow):
         self.clipboardChangedState.addTransition(
             self.controller.clipboardIrrelevantData, self.readyState
         )
-
-        # TODO do something more sophisticated here than merely exit without warning!
-        self.errorState.addTransition(self.finalState)
 
     @Slot()
     def evaluateInputFields(self) -> None:
@@ -859,11 +859,12 @@ class MainWindow(QMainWindow):
 
     @Slot(Exception)
     def movieInfoException(self, exception: Exception) -> None:
-        logger.debug("Error getting movie information")
+        logger.error("Error getting movie information")
         logger.error("%s: %s", exception.__class__.__name__, str(exception))
-        self.playSound("error.mp3")
-        if hasattr(self, "progressDialog") and self.progressDialog.isVisible():
+        if hasattr(self, "progressDialog"):
             self.progressDialog.reset()
+        QMessageBox.critical(self, "Error searching dataset", str(exception))
+        self.playSound("error.mp3")
         self.controller.searchDatasetError.emit()
 
     @Slot(str)
