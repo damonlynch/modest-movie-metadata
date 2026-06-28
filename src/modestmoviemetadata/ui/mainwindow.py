@@ -72,13 +72,13 @@ IMDB_YEAR_MIN = 1894
 
 class MainWindow(QMainWindow):
     inputFieldEdited = Signal()
-    inputFieldsEmpty = Signal()
-    inputFieldsNotEmpty = Signal()
-    imdbIdDiffers = Signal()
-    folderLabelEmpty = Signal()
+    inputFieldsCleared = Signal()
+    inputFieldsEntered = Signal()
+    imdbIdDifferenceDetected = Signal()
+    folderLabelCleared = Signal()
     folderLabelGenerated = Signal()
-    datasetSearchPossible = Signal()
-    datasetSearchImpossible = Signal()
+    validSearchTermsEntered = Signal()
+    validSearchTermsNotEntered = Signal()
 
     def __init__(
         self,
@@ -128,7 +128,7 @@ class MainWindow(QMainWindow):
             QTimer.singleShot(0, self.close)
 
     def closeEvent(self, event: QCloseEvent):
-        self.controller.machineClosing.emit()
+        self.controller.machineCloseRequested.emit()
         event.accept()
 
     def setupWidgets(self) -> None:
@@ -205,22 +205,22 @@ class MainWindow(QMainWindow):
         self.resetButton = self.buttonBox.button(QDialogButtonBox.StandardButton.Reset)
         self.resetButton.setToolTip("Reset")
         self.resetButton.setToolTip("Clear the IMDb, Title and Year values")
-        self.resetButton.clicked.connect(self.controller.resetFields)
+        self.resetButton.clicked.connect(self.controller.resetRequested)
 
         self.copyButton = self.buttonBox.button(QDialogButtonBox.StandardButton.Apply)
-        self.copyButton.clicked.connect(self.controller.copyToClipboard)
+        self.copyButton.clicked.connect(self.controller.copyToClipboardRequested)
         self.copyButton.setText("&Copy")
         self.copyButton.setToolTip("Copy the Jellyfin folder name to the clipboard")
 
         self.getButton = self.buttonBox.button(QDialogButtonBox.StandardButton.Open)
         self.getButton.setText("&Get")
-        self.getButton.clicked.connect(self.controller.searchDataset)
+        self.getButton.clicked.connect(self.controller.searchRequested)
         self.getButton.setToolTip("Get the Jellyfin folder name")
 
         self.updateButton = self.buttonBox.addButton(
             QDialogButtonBox.StandardButton.Reset
         )
-        self.updateButton.clicked.connect(self.controller.update)
+        self.updateButton.clicked.connect(self.controller.updateRequested)
         self.updateButton.setText("&Update Dataset")
         self.updateButton.setToolTip("Get the latest online IMDb dataset")
 
@@ -374,25 +374,29 @@ class MainWindow(QMainWindow):
         )
         self.checkDatabaseState.entered.connect(self.checkDatabase)
         self.checkDatabaseState.addTransition(
-            self.controller.databaseValid, self.operationalState
+            self.controller.databaseVerified, self.operationalState
         )
         self.checkDatabaseState.addTransition(
-            self.controller.databaseInvalid, self.newDatabaseState
+            self.controller.databaseVerificationFailed, self.newDatabaseState
         )
         self.newDatabaseState.entered.connect(self.newDatabase)
-        self.newDatabaseState.addTransition(self.controller.update, self.updateState)
         self.newDatabaseState.addTransition(
-            self.controller.doNotCreateDataset, self.finalState
+            self.controller.updateRequested, self.updateState
+        )
+        self.newDatabaseState.addTransition(
+            self.controller.datasetCreationRejected, self.finalState
         )
 
         self.operationalState.setInitialState(self.readyState)
         self.operationalHistoryState.setDefaultState(self.readyState)
 
         self.readyState.assignProperty(self.mainWidget, "enabled", True)
-        self.readyState.addTransition(self.controller.machineClosing, self.finalState)
-        self.readyState.addTransition(self.controller.update, self.updateState)
         self.readyState.addTransition(
-            self.controller.searchDataset, self.searchDatasetState
+            self.controller.machineCloseRequested, self.finalState
+        )
+        self.readyState.addTransition(self.controller.updateRequested, self.updateState)
+        self.readyState.addTransition(
+            self.controller.searchRequested, self.searchDatasetState
         )
         self.inputFieldsRegionState.setInitialState(self.inputFieldsEvaluationState)
         self.generationRegionState.setInitialState(self.generationEvaluationState)
@@ -402,19 +406,19 @@ class MainWindow(QMainWindow):
 
         self.inputFieldsEvaluationState.entered.connect(self.evaluateInputFields)
         self.inputFieldsEvaluationState.addTransition(
-            self.inputFieldsEmpty, self.emptyState
+            self.inputFieldsCleared, self.emptyState
         )
         self.inputFieldsEvaluationState.addTransition(
-            self.inputFieldsNotEmpty, self.notEmptyState
+            self.inputFieldsEntered, self.notEmptyState
         )
         self.emptyState.assignProperty(self.resetButton, "enabled", False)
         self.notEmptyState.assignProperty(self.resetButton, "enabled", True)
-        self.emptyState.addTransition(self.inputFieldsNotEmpty, self.notEmptyState)
-        self.notEmptyState.addTransition(self.inputFieldsEmpty, self.emptyState)
+        self.emptyState.addTransition(self.inputFieldsEntered, self.notEmptyState)
+        self.notEmptyState.addTransition(self.inputFieldsCleared, self.emptyState)
 
         self.generationEvaluationState.entered.connect(self.evaluateFolderLabel)
         self.generationEvaluationState.addTransition(
-            self.folderLabelEmpty, self.notGeneratedState
+            self.folderLabelCleared, self.notGeneratedState
         )
         self.generationEvaluationState.addTransition(
             self.folderLabelGenerated, self.generatedState
@@ -422,29 +426,31 @@ class MainWindow(QMainWindow):
 
         self.notGeneratedState.assignProperty(self.copyButton, "enabled", False)
         self.generatedState.assignProperty(self.copyButton, "enabled", True)
-        self.generatedState.addTransition(self.imdbIdDiffers, self.notGeneratedState)
+        self.generatedState.addTransition(
+            self.imdbIdDifferenceDetected, self.notGeneratedState
+        )
 
         self.searchDatasetPossibleEvaluationState.entered.connect(
             self.evaluateDatasetSearchPossible
         )
         self.searchDatasetPossibleEvaluationState.addTransition(
-            self.datasetSearchPossible, self.searchDatasetPossibleState
+            self.validSearchTermsEntered, self.searchDatasetPossibleState
         )
         self.searchDatasetPossibleEvaluationState.addTransition(
-            self.datasetSearchImpossible, self.searchDatasetImpossibleState
+            self.validSearchTermsNotEntered, self.searchDatasetImpossibleState
         )
         self.searchDatasetPossibleState.assignProperty(self.getButton, "enabled", True)
         self.searchDatasetImpossibleState.assignProperty(
             self.getButton, "enabled", False
         )
         self.searchDatasetPossibleState.addTransition(
-            self.datasetSearchImpossible, self.searchDatasetImpossibleState
+            self.validSearchTermsNotEntered, self.searchDatasetImpossibleState
         )
         self.searchDatasetImpossibleState.addTransition(
-            self.datasetSearchPossible, self.searchDatasetPossibleState
+            self.validSearchTermsEntered, self.searchDatasetPossibleState
         )
 
-        self.readyState.addTransition(self.controller.resetFields, self.resetState)
+        self.readyState.addTransition(self.controller.resetRequested, self.resetState)
         self.resetState.entered.connect(self.resetFields)
         self.resetState.addTransition(self.operationalState)
 
@@ -454,55 +460,59 @@ class MainWindow(QMainWindow):
             self.controller.updateFinished, self.operationalHistoryState
         )
         self.updateState.addTransition(
-            self.controller.updateError, self.checkDatabaseState
+            self.controller.updateFailed, self.checkDatabaseState
         )
 
         self.searchDatasetState.entered.connect(self.searchDataset)
-        self.searchDatasetState.addTransition(self.controller.update, self.updateState)
         self.searchDatasetState.addTransition(
-            self.controller.addTitleIndex, self.addTitleIndexState
+            self.controller.updateRequested, self.updateState
         )
         self.searchDatasetState.addTransition(
-            self.controller.addTitleIndexError, self.checkDatabaseState
+            self.controller.addIndexRequested, self.addTitleIndexState
         )
         self.searchDatasetState.addTransition(
-            self.controller.searchDatasetTitleNotFound, self.readyState
+            self.controller.addIndexFailed, self.checkDatabaseState
         )
         self.searchDatasetState.addTransition(
-            self.controller.searchDatasetInsufficientData, self.readyState
+            self.controller.searchTitleNotFound, self.readyState
         )
         self.searchDatasetState.addTransition(
-            self.controller.searchDatasetTitleFound, self.generateFolderLabelState
+            self.controller.searchInsufficientDataInput, self.readyState
         )
         self.searchDatasetState.addTransition(
-            self.controller.searchDatasetError, self.checkDatabaseState
+            self.controller.searchTitleFound, self.generateFolderLabelState
+        )
+        self.searchDatasetState.addTransition(
+            self.controller.searchDatasetFailed, self.checkDatabaseState
         )
 
         self.addTitleIndexState.entered.connect(self.addTitleIndex)
         self.addTitleIndexState.addTransition(
-            self.controller.addTitleIndexCancelled, self.readyState
+            self.controller.addIndexCancelled, self.readyState
         )
         self.addTitleIndexState.addTransition(
-            self.controller.addTitleIndexFinished, self.searchDatasetState
+            self.controller.addIndexFinished, self.searchDatasetState
         )
         self.addTitleIndexState.addTransition(
-            self.controller.addTitleIndexError, self.readyState
+            self.controller.addIndexFailed, self.readyState
         )
         self.addTitleIndexState.addTransition(
-            self.controller.addTitleIndexRefused, self.searchDatasetState
+            self.controller.addIndexRefused, self.searchDatasetState
         )
 
         self.generateFolderLabelState.entered.connect(self.generateFolderName)
+        # Transient state: generates folder label, then immediately transitions to copy
         self.generateFolderLabelState.addTransition(self.copyState)
 
         self.copyState.entered.connect(self.copyToClipboard)
         self.copyState.addTransition(self.readyState)
-        self.readyState.addTransition(self.controller.copyToClipboard, self.copyState)
-        self.searchDatasetState.addTransition(
-            self.controller.copyToClipboard, self.copyState
+        self.readyState.addTransition(
+            self.controller.copyToClipboardRequested, self.copyState
         )
 
         self.aboutState.entered.connect(self.showAboutDialog)
+        # Transient state: once About window is closed, immediately transitions to
+        # ready state
         self.aboutState.addTransition(self.readyState)
         self.readyState.addTransition(self.aboutButton.clicked, self.aboutState)
 
@@ -511,10 +521,10 @@ class MainWindow(QMainWindow):
         )
         self.clipboardChangedState.entered.connect(self.clipboardDataChanged)
         self.clipboardChangedState.addTransition(
-            self.controller.searchDataset, self.searchDatasetState
+            self.controller.searchRequested, self.searchDatasetState
         )
         self.clipboardChangedState.addTransition(
-            self.controller.clipboardIrrelevantData, self.readyState
+            self.controller.clipboardIrrelevantDataInput, self.readyState
         )
 
     @Slot()
@@ -524,19 +534,19 @@ class MainWindow(QMainWindow):
             and not self.titleEdit.text().strip()
             and not self.imdbEdit.text().strip()
         )
-        self.inputFieldsEmpty.emit() if empty else self.inputFieldsNotEmpty.emit()
+        self.inputFieldsCleared.emit() if empty else self.inputFieldsEntered.emit()
 
         if self.generated_imdb_id != self.imdbEdit.text().strip():
             self.folderLabel.clear()
             self.generated_imdb_id = ""
-            self.imdbIdDiffers.emit()
+            self.imdbIdDifferenceDetected.emit()
 
     @Slot()
     def evaluateFolderLabel(self) -> None:
         if self.folderLabel.text():
             self.folderLabelGenerated.emit()
         else:
-            self.folderLabelEmpty.emit()
+            self.folderLabelCleared.emit()
 
     @Slot()
     def evaluateDatasetSearchPossible(self) -> None:
@@ -547,9 +557,9 @@ class MainWindow(QMainWindow):
         imdb_matches = imdb and imdb == self.generated_imdb_id
 
         if have_text and not imdb_matches:
-            self.datasetSearchPossible.emit()
+            self.validSearchTermsEntered.emit()
         else:
-            self.datasetSearchImpossible.emit()
+            self.validSearchTermsNotEntered.emit()
 
     @Slot()
     def updateDataset(self) -> None:
@@ -604,7 +614,7 @@ class MainWindow(QMainWindow):
         QMessageBox.critical(self, "Error updating dataset", str(exception))
         if hasattr(self, "progressDialog"):
             self.progressDialog.reset()
-        self.controller.updateError.emit()
+        self.controller.updateFailed.emit()
 
     @Slot()
     def searchDataset(self):
@@ -615,14 +625,14 @@ class MainWindow(QMainWindow):
         imdb_id = self.imdbEdit.text().strip()
 
         if not self.sufficientDataForSearchDataset(title, year, imdb_id):
-            self.controller.searchDatasetInsufficientData.emit()
+            self.controller.searchInsufficientDataInput.emit()
             return
 
         if not imdb_id and title:
             # if year is not None:
 
             if not table_index_exists():
-                self.controller.addTitleIndex.emit()
+                self.controller.addIndexRequested.emit()
                 return
 
             searching_for = f"{title} ({year})" if year is not None else title
@@ -681,12 +691,12 @@ class MainWindow(QMainWindow):
                 self.settings.setValue(key, "do not show")
             if ret == QMessageBox.StandardButton.Cancel:
                 logger.debug("User cancelled index creation")
-                self.controller.addTitleIndexCancelled.emit()
+                self.controller.addIndexCancelled.emit()
                 return
 
             if ret == QMessageBox.StandardButton.No:
                 logger.debug("User refused index creation")
-                self.controller.addTitleIndexRefused.emit()
+                self.controller.addIndexRefused.emit()
                 return
 
         # The user has agreed to creating the index, either previously or just now
@@ -705,14 +715,14 @@ class MainWindow(QMainWindow):
 
     @Slot()
     def addTitleIndexFinished(self) -> None:
-        self.controller.addTitleIndexFinished.emit()
+        self.controller.addIndexFinished.emit()
         self.progressDialog.reset()
 
     @Slot(Exception)
     def addTitleIndexException(self, exception: Exception) -> None:
         logger.error(str(exception))
         QMessageBox.critical(self, "Error optimizing dataset", str(exception))
-        self.controller.addTitleIndexError.emit()
+        self.controller.addIndexFailed.emit()
         self.progressDialog.reset()
 
     @Slot()
@@ -733,9 +743,9 @@ class MainWindow(QMainWindow):
             logger.debug("IMDb id %s detected in clipboard", text)
             self.resetFields()
             self.imdbEdit.setText(text)
-            self.controller.searchDataset.emit()
+            self.controller.searchRequested.emit()
         else:
-            self.controller.clipboardIrrelevantData.emit()
+            self.controller.clipboardIrrelevantDataInput.emit()
 
     @Slot()
     def resetFields(self) -> None:
@@ -750,9 +760,9 @@ class MainWindow(QMainWindow):
     def checkDatabase(self) -> None:
         if database_exists():
             self.showLastUpdated()
-            self.controller.databaseValid.emit()
+            self.controller.databaseVerified.emit()
         else:
-            self.controller.databaseInvalid.emit()
+            self.controller.databaseVerificationFailed.emit()
 
     def newDatabase(self) -> None:
         worker = Worker(dataset_downward_size)
@@ -776,9 +786,9 @@ class MainWindow(QMainWindow):
             "Do you want this program to proceed with the download and conversion?",
         )
         if ret == QMessageBox.StandardButton.No:
-            self.controller.doNotCreateDataset.emit()
+            self.controller.datasetCreationRejected.emit()
         else:
-            self.controller.update.emit()
+            self.controller.updateRequested.emit()
 
     @Slot(Exception)
     def newDatabaseException(self, exception: Exception) -> None:
@@ -824,9 +834,9 @@ class MainWindow(QMainWindow):
                 )
                 self.settings.setValue("Last_Prompted", datetime.now().isoformat())
                 if ret == QMessageBox.StandardButton.Yes:
-                    self.controller.update.emit()
+                    self.controller.updateRequested.emit()
                     return
-            self.controller.searchDatasetTitleNotFound.emit()
+            self.controller.searchTitleNotFound.emit()
             return
 
         if len(movie_infos) == 1:
@@ -842,9 +852,9 @@ class MainWindow(QMainWindow):
         if movie_info is not None:
             logger.debug("%s (%s)", movie_info.title, movie_info.year)
             self.setMovieInfo(movie_info)
-            self.controller.searchDatasetTitleFound.emit()
+            self.controller.searchTitleFound.emit()
         else:
-            self.controller.searchDatasetTitleNotFound.emit()
+            self.controller.searchTitleNotFound.emit()
 
     def setMovieInfo(self, movieInfo: MovieInfo) -> None:
         self.titleEdit.setText(movieInfo.title)
@@ -865,7 +875,7 @@ class MainWindow(QMainWindow):
             self.progressDialog.reset()
         QMessageBox.critical(self, "Error searching dataset", str(exception))
         self.playSound("error.mp3")
-        self.controller.searchDatasetError.emit()
+        self.controller.searchDatasetFailed.emit()
 
     @Slot(str)
     def playSound(self, sound: str) -> None:
