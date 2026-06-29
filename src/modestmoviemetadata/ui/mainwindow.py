@@ -291,8 +291,17 @@ class MainWindow(QMainWindow):
         self.searchDatasetState = State(
             name="searchDatasetState", parent=self.operationalState
         )
+        # searchPendingState is a Transient Evaluation State whose only purpose is to
+        # evaluate whether an index is needed and transition to either
+        # addTitleIndexState or searchingState.
+        self.searchPendingState = State(
+            name="searchPendingState", parent=self.searchDatasetState
+        )
+        self.searchingState = State(
+            name="searchingState", parent=self.searchDatasetState
+        )
         self.addTitleIndexState = State(
-            name="addTitleIndexState", parent=self.operationalState
+            name="addTitleIndexState", parent=self.searchDatasetState
         )
 
         # Track whether any input fields contain data, which is used for
@@ -300,7 +309,7 @@ class MainWindow(QMainWindow):
         self.inputFieldsRegionState = State(
             name="inputFieldsRegionState", parent=self.readyState
         )
-        # inputFieldsEvaluationState is a Transient Evaluating State whose only purpose
+        # inputFieldsEvaluationState is a Transient Evaluation State whose only purpose
         # is to determine whether the window's fields are empty or not empty.
         self.inputFieldsEvaluationState = State(
             name="inputFieldsEvaluationState", parent=self.inputFieldsRegionState
@@ -314,7 +323,7 @@ class MainWindow(QMainWindow):
         self.generationRegionState = State(
             name="generationRegionState", parent=self.readyState
         )
-        # folderLabelEvaluationState is a Transient Evaluating State whose only purpose
+        # folderLabelEvaluationState is a Transient Evaluation State whose only purpose
         # is to determine whether the window's folder label is empty or populated.
         self.generationEvaluationState = State(
             name="generationEvaluationState", parent=self.generationRegionState
@@ -463,26 +472,26 @@ class MainWindow(QMainWindow):
             self.controller.updateFailed, self.checkDatabaseState
         )
 
-        self.searchDatasetState.entered.connect(self.searchDataset)
-        self.searchDatasetState.addTransition(
-            self.controller.updateRequested, self.updateState
-        )
-        self.searchDatasetState.addTransition(
+        self.searchDatasetState.setInitialState(self.searchPendingState)
+        self.searchPendingState.entered.connect(self.evaluateSearch)
+        self.searchPendingState.addTransition(
             self.controller.addIndexRequested, self.addTitleIndexState
         )
-        self.searchDatasetState.addTransition(
-            self.controller.addIndexFailed, self.checkDatabaseState
+        self.searchPendingState.addTransition(
+            self.controller.searchEvaluationSucceeded, self.searchingState
         )
-        self.searchDatasetState.addTransition(
+
+        self.searchingState.entered.connect(self.searchingDataset)
+        self.searchingState.addTransition(
+            self.controller.updateRequested, self.updateState
+        )
+        self.searchingState.addTransition(
             self.controller.searchTitleNotFound, self.readyState
         )
-        self.searchDatasetState.addTransition(
-            self.controller.searchInsufficientDataInput, self.readyState
-        )
-        self.searchDatasetState.addTransition(
+        self.searchingState.addTransition(
             self.controller.searchTitleFound, self.generateFolderLabelState
         )
-        self.searchDatasetState.addTransition(
+        self.searchingState.addTransition(
             self.controller.searchDatasetFailed, self.checkDatabaseState
         )
 
@@ -491,13 +500,13 @@ class MainWindow(QMainWindow):
             self.controller.addIndexCancelled, self.readyState
         )
         self.addTitleIndexState.addTransition(
-            self.controller.addIndexFinished, self.searchDatasetState
+            self.controller.addIndexFinished, self.searchingState
         )
         self.addTitleIndexState.addTransition(
-            self.controller.addIndexFailed, self.readyState
+            self.controller.addIndexFailed, self.checkDatabaseState
         )
         self.addTitleIndexState.addTransition(
-            self.controller.addIndexRefused, self.searchDatasetState
+            self.controller.addIndexRefused, self.searchingState
         )
 
         self.generateFolderLabelState.entered.connect(self.generateFolderName)
@@ -531,12 +540,12 @@ class MainWindow(QMainWindow):
     def evaluateInputFields(self) -> None:
         empty = (
             self.yearSpinbox.isEmpty()
-            and not self.titleEdit.text().strip()
-            and not self.imdbEdit.text().strip()
+            and not self.titleEdit.text()
+            and not self.imdbEdit.text()
         )
         self.inputFieldsCleared.emit() if empty else self.inputFieldsEntered.emit()
 
-        if self.generated_imdb_id != self.imdbEdit.text().strip():
+        if self.generated_imdb_id != self.imdbEdit.text():
             self.folderLabel.clear()
             self.generated_imdb_id = ""
             self.imdbIdDifferenceDetected.emit()
@@ -550,13 +559,16 @@ class MainWindow(QMainWindow):
 
     @Slot()
     def evaluateDatasetSearchPossible(self) -> None:
-        imdb = self.imdbEdit.text().strip()
-        title = self.titleEdit.text().strip()
+        imdb = self.imdbEdit.text()
+        title = self.titleEdit.text()
 
-        have_text = bool(title or imdb)
+        valid_imdb = len(imdb) > 2 and imdb[:2] == "tt" and imdb[2:].isdigit()
+        have_valid_text = (
+            bool(valid_imdb) or (title and valid_imdb) or (title and not imdb)
+        )
         imdb_matches = imdb and imdb == self.generated_imdb_id
 
-        if have_text and not imdb_matches:
+        if have_valid_text and not imdb_matches:
             self.validSearchTermsEntered.emit()
         else:
             self.validSearchTermsNotEntered.emit()
@@ -617,24 +629,22 @@ class MainWindow(QMainWindow):
         self.controller.updateFailed.emit()
 
     @Slot()
-    def searchDataset(self):
-        title = self.titleEdit.text().strip()
+    def evaluateSearch(self) -> None:
+        if not self.imdbEdit.text() and not table_index_exists():
+            # Need a title index to search
+            self.controller.addIndexRequested.emit()
+            return
+        self.controller.searchEvaluationSucceeded.emit()
+
+    @Slot()
+    def searchingDataset(self):
+        title = self.titleEdit.text()
         year = self.yearSpinbox.value()
         if year == IMDB_YEAR_MIN - 1:
             year = None
-        imdb_id = self.imdbEdit.text().strip()
-
-        if not self.sufficientDataForSearchDataset(title, year, imdb_id):
-            self.controller.searchInsufficientDataInput.emit()
-            return
+        imdb_id = self.imdbEdit.text()
 
         if not imdb_id and title:
-            # if year is not None:
-
-            if not table_index_exists():
-                self.controller.addIndexRequested.emit()
-                return
-
             searching_for = f"{title} ({year})" if year is not None else title
             self.progressDialog = QProgressDialog(
                 f"Searching for {searching_for}...", None, 0, 0, self
@@ -649,21 +659,6 @@ class MainWindow(QMainWindow):
         worker.signals.result.connect(self.movieInfoExtracted)
         worker.signals.error.connect(self.movieInfoException)
         self.threadpool.start(worker)
-
-    @staticmethod
-    def sufficientDataForSearchDataset(
-        title: str, year: int | None, imdb_id: str
-    ) -> bool:
-        if not (title or year or imdb_id):
-            return False
-
-        if not title:
-            if len(imdb_id) < 2:
-                return False
-
-            if not imdb_id[2:].isdigit():
-                return False
-        return True
 
     @Slot()
     def addTitleIndex(self) -> None:
@@ -800,6 +795,7 @@ class MainWindow(QMainWindow):
 
     def generateFolderName(self) -> None:
         title = self.titleEdit.text()
+        # Get the spinbox text, not the value, because minimum value == ""
         year = self.yearSpinbox.text()
 
         text = f"{sanitise_title(title)} ({year})" if year else sanitise_title(title)
