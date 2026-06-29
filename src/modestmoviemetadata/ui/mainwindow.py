@@ -181,9 +181,9 @@ class MainWindow(QMainWindow):
         self.lastUpdatedTimer.start()
 
         self.titleEdit.textEdited.connect(self.inputFieldEdited)
-        self.titleEdit.pasted.connect(self.inputFieldEdited)
         self.yearSpinbox.valueChanged.connect(self.inputFieldEdited)
         self.imdbEdit.textEdited.connect(self.inputFieldEdited)
+        self.imdbEdit.pasted.connect(self.filterImdbEdit)
 
         self.inputFieldEdited.connect(self.evaluateInputFields)
         self.inputFieldEdited.connect(self.evaluateDatasetSearchPossible)
@@ -572,6 +572,13 @@ class MainWindow(QMainWindow):
             self.validSearchTermsEntered.emit()
         else:
             self.validSearchTermsNotEntered.emit()
+
+    @Slot()
+    def filterImdbEdit(self) -> None:
+        imdb_id = get_imdb(self.imdbEdit.text())
+        if imdb_id:
+            self.imdbEdit.setText(imdb_id)
+            self.controller.searchRequested.emit()
 
     @Slot()
     def updateDataset(self) -> None:
