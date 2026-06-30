@@ -480,6 +480,9 @@ class MainWindow(QMainWindow):
         self.searchPendingState.addTransition(
             self.controller.searchEvaluationSucceeded, self.searchingState
         )
+        self.searchPendingState.addTransition(
+            self.controller.searchEvaluationFailure, self.readyState
+        )
 
         self.searchingState.entered.connect(self.searchingDataset)
         self.searchingState.addTransition(
@@ -634,8 +637,15 @@ class MainWindow(QMainWindow):
 
     @Slot()
     def evaluateSearch(self) -> None:
-        # TODO error checking
-        if not self.imdbEdit.text() and not table_index_exists():
+        try:
+            index_exists = table_index_exists()
+        except Exception as e:
+            logger.exception("Checking table index failed")
+            QMessageBox.critical(self, "Error querying dataset", str(e))
+            self.controller.searchEvaluationFailure.emit()
+            return
+
+        if not self.imdbEdit.text() and not index_exists:
             # Need a title index to search
             self.controller.addIndexRequested.emit()
             return
@@ -686,13 +696,13 @@ class MainWindow(QMainWindow):
             cb = QCheckBox("Don't ask again")
             msgBox.setCheckBox(cb)
             ret = msgBox.exec()
-            if cb.isChecked():
-                # This value can be set to anything; the value merely has to exist
-                self.settings.setValue(key, "do not show")
             if ret == QMessageBox.StandardButton.Cancel:
                 logger.debug("User cancelled index creation")
                 self.controller.addIndexCancelled.emit()
                 return
+            if cb.isChecked():
+                # This value can be set to anything; the value merely has to exist
+                self.settings.setValue(key, "do not show")
 
         # The user has agreed to creating the index, either previously or just now
         self.progressDialog = QProgressDialog(
@@ -831,7 +841,8 @@ class MainWindow(QMainWindow):
 
     @Slot(object)
     def movieInfoExtracted(self, movie_infos: list[MovieInfo | None]) -> None:
-        logger.info("Located %s titles", len(movie_infos))
+        n = len(movie_infos) if movie_infos is not None else 0
+        logger.info("Located %s titles", n)
         movie_info = None
 
         if movie_infos is None:

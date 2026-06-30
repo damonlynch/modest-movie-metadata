@@ -68,6 +68,7 @@ class StateMachineSignals(QObject):
     updateFailed = Signal()
     searchRequested = Signal()
     searchEvaluationSucceeded = Signal()
+    searchEvaluationFailure = Signal()
     searchTitleFound = Signal()
     searchTitleNotFound = Signal()
     searchDatasetFailed = Signal()
