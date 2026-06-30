@@ -48,6 +48,7 @@ from modestmoviemetadata.tools.movieinfo import (
 )
 from modestmoviemetadata.tools.utilities import (
     format_bytes,
+    format_bytes_fraction_gb,
     program_icon_path,
     video_folder_path,
 )
@@ -673,15 +674,15 @@ class MainWindow(QMainWindow):
         if not self.settings.value(key, ""):
             logger.debug("Prompting whether to add primary title index")
             current_size = imdb_db_path().lstat().st_size
-            current = format_bytes(current_size)
-            projected = format_bytes(current_size * 2)
+            current = format_bytes_fraction_gb(current_size)
+            projected = format_bytes_fraction_gb(current_size * 2)
 
             msgBox = QMessageBox(parent=self)
             msgBox.setWindowTitle("Database Optimization")
             msgBox.setText(
                 "Searching without the IMDb ID requires additional database "
-                "optimization to improve search speed. This process may take a few "
-                "minutes.\n\n"
+                "optimization to make searches instantaneous. This process may take "
+                "a few minutes.\n\n"
                 f"The database will double in size from {current} to "
                 f"about {projected}.\n\n"
                 "Without this optimization, searching without the IMDb ID is not "
@@ -779,10 +780,10 @@ class MainWindow(QMainWindow):
     def newDatabaseSizeResult(self, data: object) -> None:
         size = int(data)
         if size:
-            download_size = f"{format_bytes(size)} " if size > 0 else ""
-            projected_size = format_bytes(size * 4.7)
+            download_size = f"{format_bytes(size)} "
+            projected_size = format_bytes_fraction_gb(size * 4.7)
             projected_msg = (
-                "The dataset will then be converted into a database roughly "
+                "The dataset will then be converted into a database about "
                 f"{projected_size} in size, which may take a few minutes."
             )
         else:
@@ -795,11 +796,11 @@ class MainWindow(QMainWindow):
         msgBox = QMessageBox(parent=self)
         msgBox.setWindowTitle("Database Required")
         msgBox.setText(
-            "To continue this program will download from IMDb a publicly "
+            "This program will download from IMDb a publicly "
             f"available {download_size}dataset.\n\n"
             f"{projected_msg} "
             "Without this database, the program is unable to function.\n\n"
-            "Do you want this program to proceed with the download and conversion?",
+            "Do you want to continue?",
         )
         msgBox.setIcon(QMessageBox.Icon.Question)
         msgBox.setStandardButtons(

@@ -33,6 +33,14 @@ def data_file_path(data_file: str) -> Path:
 
 
 def format_bytes(bytes_value: int) -> str:
+    """
+    Convert bytes to a human-readable format.
+
+    >>> format_bytes(1049866240)
+    '1001 MB'
+    >>> format_bytes(1024)
+    '1 KB'
+    """
     if bytes_value == 0:
         return "0 B"
 
@@ -48,3 +56,17 @@ def format_bytes(bytes_value: int) -> str:
     scaled_value = bytes_value / p
 
     return f"{scaled_value:.0f} {units[i]}"
+
+
+def format_bytes_fraction_gb(byte_value: int) -> str:
+    """
+    Convert bytes to quarter fractions of a gigabyte, rounding up or down
+
+    >>> format_bytes_fraction_gb(1049866240)
+    '1.0 GB'
+
+    """
+    # Convert bytes to binary gigabytes (GiB)
+    gib_value = byte_value / (1024**3)
+    # Round to the nearest 0.25
+    return f"{round(gib_value / 0.25) * 0.25} GB"
