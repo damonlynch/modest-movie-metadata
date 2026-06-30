@@ -1,5 +1,11 @@
 # Changelog for Modest Movie Metadata
 
+## 2.0.0b2 (2026-06-30)
+
+- Refactor user interface logic by using Qt's state machine.
+- Disable user interface buttons when clicking them would have no effect
+- Significantly speed up searching by title by using SQLite FTS5 virtual table for high-speed text lookups.
+
 ## 2.0.0b1 (2026-06-13)
 
 - Purge use of remote access to IMDb data using Cinemagoer in favor of downloading a freely available non-commercial dataset directly from IMDb.

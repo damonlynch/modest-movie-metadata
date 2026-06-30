@@ -23,3 +23,6 @@ class FancyLineEdit(QLineEdit):
     def mouseReleaseEvent(self, event: QMouseEvent) -> None:
         super().mouseReleaseEvent(event)
         self.selectAll()
+
+    def text(self) -> str:
+        return super().text().strip()

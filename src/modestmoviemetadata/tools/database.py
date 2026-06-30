@@ -24,6 +24,11 @@ from modestmoviemetadata.tools.utilities import format_bytes
 
 logger = get_logger()
 
+TABLE_INDICES = {
+    "title": ("ix_titles_primary_title", "primary_title"),
+    "title year": ("ix_titles_primary_title_premiered", "primary_title, premiered"),
+}
+
 
 def convert_last_modified_header(web_mtime: str) -> datetime:
     """
@@ -151,44 +156,106 @@ def query_by_imdb_id(imdb_id: str) -> tuple[str, int] | None:
         return row
 
 
-def query_by_title(title: str) -> list[tuple[str, int, str]]:
+def query_by_title(title: str, year: int | None) -> list[tuple[str, int, str]]:
     with closing(sqlite3.connect(imdb_db_path())) as conn:
         c = conn.cursor()
-        formatted_search = f"%{title}%"
-        # Convert NULL years to 0, which is important when comparing years via
-        # integer comparison
-        c.execute(
-            """
-            SELECT primary_title, IFNULL(premiered, 0), title_id FROM titles 
-            WHERE primary_title LIKE ?
-            """,
-            (formatted_search,),
-        )
+        fts_search = f'"{title}"*'
+        if year is None:
+            # Search by title, with no year
+            c.execute(
+                """
+                SELECT t.primary_title, t.premiered, t.title_id 
+                FROM titles t
+                JOIN titles_search s ON t.title_id = s.title_id
+                WHERE s.primary_title MATCH ?
+                """,
+                (fts_search,),
+            )
+        else:
+            # Search by title and year
+            year_min = year - 1
+            year_max = year + 1
+            c.execute(
+                """
+                SELECT t.primary_title, t.premiered, t.title_id 
+                FROM titles t
+                JOIN titles_search s ON t.title_id = s.title_id
+                WHERE s.primary_title MATCH ? 
+                  AND t.premiered BETWEEN ? AND ?
+                """,
+                (fts_search, year_min, year_max),
+            )
         rows = c.fetchall()
         return rows
 
 
-def title_index_exists() -> bool:
+def table_index_exists() -> bool:
+    """
+    :return: True if an index exists for the year (premiered) field and the FTS5
+     virtual table exists, else False
+    """
     with closing(sqlite3.connect(imdb_db_path())) as conn:
         c = conn.cursor()
+        # Check if an index exists for the year (premiered) field
         c.execute(
             """
-            SELECT 1 FROM sqlite_master WHERE type = 'index' AND 
-            name = 'ix_titles_primary_title';
+            SELECT 1 FROM sqlite_master 
+            WHERE type = 'index' 
+                AND name = 'ix_titles_premiered';
             """,
+        )
+        row = c.fetchone()
+        if row is None:
+            return False
+
+        # Check if the FTS5 virtual table exists and is correctly configured as an
+        # FTS5 virtual table (and not a standard table)
+        c.execute(
+            """
+            SELECT 1 FROM sqlite_master 
+            WHERE type = 'table' 
+                AND name = 'titles_search' 
+                AND sql LIKE '%USING fts5%';
+            """
         )
         row = c.fetchone()
         return row is not None
 
 
-def create_title_index(progress_callback: SignalInstance):
-    logger.debug("Creating title_index")
-    with closing(sqlite3.connect(imdb_db_path())) as conn:
+def create_table_index(progress_callback: SignalInstance):
+    with closing(sqlite3.connect(database=imdb_db_path(), autocommit=True)) as conn:
         c = conn.cursor()
+
+        # 1. Speed up the numeric range lookups in the main table:
+        # Create a compact, high-speed index that ignores NULL values
+        logger.debug("Creating year index")
         c.execute(
             """
-            CREATE INDEX IF NOT EXISTS ix_titles_primary_title 
-            ON titles(primary_title);
-            """,
+            CREATE INDEX IF NOT EXISTS ix_titles_premiered 
+            ON titles(premiered) 
+            WHERE premiered IS NOT NULL;
+            """
         )
-    logger.debug("title_index created")
+        logger.debug("Year index created")
+
+        # 2. Create the FTS5 virtual table for high-speed text lookups
+        logger.debug("Creating FTS5 virtual table")
+        c.execute(
+            """
+            CREATE VIRTUAL TABLE IF NOT EXISTS titles_search USING fts5(
+                title_id UNINDEXED, 
+                primary_title
+            );
+        """
+        )
+        logger.debug("FTS5 virtual table created")
+
+        # 3. Populate the virtual table with the primary table's titles
+        logger.debug("Populating FTS5 virtual table")
+        c.execute(
+            """
+            INSERT INTO titles_search(title_id, primary_title) 
+            SELECT title_id, primary_title FROM titles;
+            """
+        )
+        logger.debug("FTS5 virtual table populated")

@@ -14,7 +14,9 @@ from qtpy.QtGui import (
     QPen,
     QPixmap,
 )
+from qtpy.QtStateMachine import QStateMachine
 from qtpy.QtWidgets import (
+    QApplication,
     QDialog,
     QDialogButtonBox,
     QHBoxLayout,
@@ -28,6 +30,7 @@ from qtpy.QtWidgets import (
 
 from modestmoviemetadata.config import application_name, copyright_message, version
 from modestmoviemetadata.tools.utilities import data_file_path, pyqt_api
+from modestmoviemetadata.ui.state import FinalState, State
 
 
 class AboutDialog(QDialog):
@@ -125,6 +128,18 @@ class AboutDialog(QDialog):
             f" {link_style}>GNU Lesser General Public License, version 3</a>"
         )
 
+        imdb_link = (
+            f'(<a href="https://www.imdb.com" {link_style}>https://www.imdb.com</a>)'
+        )
+        restriction_link = (
+            "https://help.imdb.com/article/imdb/general-information/"
+            "can-i-use-imdb-data-in-my-software/G5JTRESSHJBBHTGX"
+        )
+        imdb_restrictions = (
+            f'<a href="{restriction_link}" {link_style}>'
+            f"personal and non-commercial use</a>"
+        )
+
         if pyqt_api():
             api_version = qtpy.PYQT_VERSION
             api_name = "PyQt"
@@ -136,6 +151,7 @@ class AboutDialog(QDialog):
 
         credits_text = f"""
         {copyright_message}
+        IMDb dataset conversion copyright &copy; 2018 Jonas Tingeborn.
 
         Photo {photolink} copyright © 2023 Damon Lynch, all rights reserved.
         
@@ -144,6 +160,9 @@ class AboutDialog(QDialog):
         
         Uses {api_name} {api_version}{qt_licence}.
         Uses Qt {QtCore.__version__}{lgpl3desc}.
+        
+        Information courtesy of IMDb {imdb_link}. Used with permission.
+        IMDb's data can only be used for {imdb_restrictions}.
         """
 
         credits_text = credits_text.replace("\n", "<br>\n")
@@ -180,13 +199,14 @@ class AboutDialog(QDialog):
         )
 
         buttonBox = QDialogButtonBox()
-        closeButton = buttonBox.addButton(QDialogButtonBox.StandardButton.Close)
+        self.closeButton = buttonBox.addButton(QDialogButtonBox.StandardButton.Close)
         self.creditsButton = buttonBox.addButton(
             "Credits", QDialogButtonBox.ButtonRole.HelpRole
         )
         self.creditsButton.setDefault(False)
         self.creditsButton.setCheckable(True)
-        closeButton.setDefault(True)
+        self.closeButton.setDefault(True)
+        self.closeButton.setFocus()
 
         buttonLayout = QVBoxLayout()
         buttonLayout.addWidget(buttonBox)
@@ -202,21 +222,29 @@ class AboutDialog(QDialog):
 
         self.setLayout(mainLayout)
 
-        buttonBox.rejected.connect(self.reject)
-        self.creditsButton.clicked.connect(self.creditsButtonClicked)
+        self.initialState = State(name="aboutInitialState")
+        self.finalState = FinalState(name="aboutFinalState")
 
-        closeButton.setFocus()
+        self.normalState = State(name="aboutNormalState", parent=self.initialState)
+        self.creditsState = State(name="aboutCreditsState", parent=self.initialState)
 
-    @Slot()
-    def creditsButtonClicked(self) -> None:
-        self.showStackItem()
+        self.normalState.assignProperty(self.stack, "currentIndex", 0)
+        self.creditsState.assignProperty(self.stack, "currentIndex", 1)
 
-    @Slot()
-    def showStackItem(self) -> None:
-        if self.creditsButton.isChecked():
-            self.stack.setCurrentIndex(1)
-        else:
-            self.stack.setCurrentIndex(0)
+        self.initialState.setInitialState(self.normalState)
+
+        self.normalState.addTransition(self.creditsButton.clicked, self.creditsState)
+        self.creditsState.addTransition(self.creditsButton.clicked, self.normalState)
+
+        self.initialState.addTransition(self.closeButton.clicked, self.finalState)
+
+        self.machine = QStateMachine()
+        self.machine.addState(self.initialState)
+        self.machine.addState(self.finalState)
+        self.machine.setInitialState(self.initialState)
+        self.machine.finished.connect(self.reject)
+
+        self.machine.start()
 
     def setupTitleVersion(self) -> None:
         self.title = application_name
@@ -257,3 +285,10 @@ class AboutDialog(QDialog):
         painter.setFont(self.versionFont)
         painter.drawText(QPointF(self.margin + self.padding, self.version_y), version)
         painter.end()
+
+
+if __name__ == "__main__":
+    app = QApplication([])
+    dialog = AboutDialog()
+    dialog.show()
+    app.exec()
