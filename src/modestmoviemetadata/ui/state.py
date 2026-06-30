@@ -74,7 +74,6 @@ class StateMachineSignals(QObject):
     addIndexRequested = Signal()
     addIndexCancelled = Signal()
     addIndexFinished = Signal()
-    addIndexRefused = Signal()
     addIndexFailed = Signal()
     datasetCreationRejected = Signal()
     copyToClipboardRequested = Signal()

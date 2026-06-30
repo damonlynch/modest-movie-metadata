@@ -38,7 +38,7 @@ from modestmoviemetadata.tools.database import (
     download_and_convert,
     table_index_exists,
 )
-from modestmoviemetadata.tools.filetools import program_appdata_directory
+from modestmoviemetadata.tools.filetools import imdb_db_path, program_appdata_directory
 from modestmoviemetadata.tools.logtools import get_logger
 from modestmoviemetadata.tools.movieinfo import (
     MovieInfo,
@@ -505,9 +505,6 @@ class MainWindow(QMainWindow):
         self.addTitleIndexState.addTransition(
             self.controller.addIndexFailed, self.checkDatabaseState
         )
-        self.addTitleIndexState.addTransition(
-            self.controller.addIndexRefused, self.searchingState
-        )
 
         self.generateFolderLabelState.entered.connect(self.generateFolderName)
         # Transient state: generates folder label, then immediately transitions to copy
@@ -637,6 +634,7 @@ class MainWindow(QMainWindow):
 
     @Slot()
     def evaluateSearch(self) -> None:
+        # TODO error checking
         if not self.imdbEdit.text() and not table_index_exists():
             # Need a title index to search
             self.controller.addIndexRequested.emit()
@@ -651,17 +649,9 @@ class MainWindow(QMainWindow):
             year = None
         imdb_id = self.imdbEdit.text()
 
-        if not imdb_id and title:
-            searching_for = f"{title} ({year})" if year is not None else title
-            self.progressDialog = QProgressDialog(
-                f"Searching for {searching_for}...", None, 0, 0, self
-            )
-            self.progressDialog.setMinimumDuration(0)
-            self.progressDialog.setValue(0)
-            self.progressDialog.setWindowModality(Qt.WindowModality.WindowModal)
-            self.progressDialog.setAutoReset(False)
+        y = f"({year}) " if year else ""
 
-        logger.debug("Fetching movie info %s (%s) %s", title, year, imdb_id)
+        logger.debug("Fetching movie info for %s %s%s", title, y, imdb_id)
         worker = Worker(fetch_movie_info, title, year, imdb_id)
         worker.signals.result.connect(self.movieInfoExtracted)
         worker.signals.error.connect(self.movieInfoException)
@@ -672,20 +662,28 @@ class MainWindow(QMainWindow):
         key = "Title_Index_Message"
         if not self.settings.value(key, ""):
             logger.debug("Prompting whether to add primary title index")
+            current_size = imdb_db_path().lstat().st_size
+            current = format_bytes(current_size)
+            projected = format_bytes(current_size * 2)
+
             msgBox = QMessageBox(parent=self)
             msgBox.setWindowTitle("Database Optimization")
             msgBox.setText(
-                "This search requires additional database optimization to "
-                "improve search speed. This process may take a few minutes.\n\n"
-                "Do you agree?\n"
+                "Searching without the IMDb ID requires additional database "
+                "optimization to improve search speed. This process may take a few "
+                "minutes.\n\n"
+                f"The database will double in size from {current} to "
+                f"about {projected}.\n\n"
+                "Without this optimization, searching without the IMDb ID is not "
+                "possible.\n\n"
+                "Do you want to proceed?\n"
             )
             msgBox.setIcon(QMessageBox.Icon.Question)
             msgBox.setStandardButtons(
-                QMessageBox.StandardButton.Yes
-                | QMessageBox.StandardButton.No
-                | QMessageBox.StandardButton.Cancel
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel
             )
-            cb = QCheckBox("Don't show this again")
+            msgBox.button(QMessageBox.StandardButton.Yes).setText("Optimize")
+            cb = QCheckBox("Don't ask again")
             msgBox.setCheckBox(cb)
             ret = msgBox.exec()
             if cb.isChecked():
@@ -694,11 +692,6 @@ class MainWindow(QMainWindow):
             if ret == QMessageBox.StandardButton.Cancel:
                 logger.debug("User cancelled index creation")
                 self.controller.addIndexCancelled.emit()
-                return
-
-            if ret == QMessageBox.StandardButton.No:
-                logger.debug("User refused index creation")
-                self.controller.addIndexRefused.emit()
                 return
 
         # The user has agreed to creating the index, either previously or just now
@@ -775,19 +768,36 @@ class MainWindow(QMainWindow):
     @Slot(object)
     def newDatabaseSizeResult(self, data: object) -> None:
         size = int(data)
-        s = f"{format_bytes(size)} " if size > 0 else ""
+        if size:
+            download_size = f"{format_bytes(size)} " if size > 0 else ""
+            projected_size = format_bytes(size * 4.7)
+            projected_msg = (
+                "The dataset will then be converted into a database roughly "
+                f"{projected_size} in size, which may take a few minutes."
+            )
+        else:
+            download_size = ""
+            projected_msg = (
+                "The dataset will then be converted into a database, "
+                "which may take a few minutes."
+            )
 
-        ret = QMessageBox.question(
-            self,
-            "Database Required",
+        msgBox = QMessageBox(parent=self)
+        msgBox.setWindowTitle("Database Required")
+        msgBox.setText(
             "To continue this program will download from IMDb a publicly "
-            f"available {s}dataset.\n\n"
-            "The dataset will then be converted into a database about 1 GB in "
-            "size, which may take a few minutes. "
+            f"available {download_size}dataset.\n\n"
+            f"{projected_msg} "
             "Without this database, the program is unable to function.\n\n"
             "Do you want this program to proceed with the download and conversion?",
         )
-        if ret == QMessageBox.StandardButton.No:
+        msgBox.setIcon(QMessageBox.Icon.Question)
+        msgBox.setStandardButtons(
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel
+        )
+        msgBox.button(QMessageBox.StandardButton.Yes).setText("Download")
+        ret = msgBox.exec()
+        if ret == QMessageBox.StandardButton.Cancel:
             self.controller.datasetCreationRejected.emit()
         else:
             self.controller.updateRequested.emit()
@@ -821,10 +831,7 @@ class MainWindow(QMainWindow):
 
     @Slot(object)
     def movieInfoExtracted(self, movie_infos: list[MovieInfo | None]) -> None:
-
-        if hasattr(self, "progressDialog") and self.progressDialog.isVisible():
-            self.progressDialog.reset()
-
+        logger.info("Located %s titles", len(movie_infos))
         movie_info = None
 
         if movie_infos is None:
