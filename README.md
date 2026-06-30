@@ -12,11 +12,11 @@ Designed to be as efficient as possible, you use it hands-free:
 1. Monitors the clipboard for IMDb IDs, e.g. within a URL.
 2. Automatically writes generated folder names to the clipboard.
 
-If you prefer, you can enter only the title and year, and attempt to look up the IMDb ID using this tool. However, in practice, it is typically easier to search for the content on the IMDb website using a web browser, and then simply copy the URL to the clipboard.
+If you prefer, you can enter only the title and optionally a year, and attempt to look up the IMDb ID using this tool.
 
 The program does not create or monitor folders on the file system.
 
-To function, the program will download a dataset [published by IMDb](https://developer.imdb.com/non-commercial-datasets/) for non-commercial, personal use.  The  dataset will be converted into a database. The database contains:
+To function, the program will download a dataset [published by IMDb](https://developer.imdb.com/non-commercial-datasets/) for non-commercial, personal use.  The  dataset will be converted into a database optimized for quick searches. The database contains:
 1. the title's IMDb ID, e.g. `tt0084988`
 2. the primary title, e.g. `The Black Adder`
 3. the year the title premiered, e.g. `1983`
