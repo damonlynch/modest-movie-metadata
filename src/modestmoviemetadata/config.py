@@ -12,12 +12,7 @@ logfile_name = "modest-movie-metadata.log"
 
 copyright_message = "Copyright &copy; 2024-2026 Damon Lynch."
 
-try:
-    version = importlib.metadata.version("modestmoviemetadata")
-    if version == "0.0.0":
-        version = __version__
-except importlib.metadata.PackageNotFoundError:
-    version = __version__
+version = __version__
 
 app_guid = "17ea3af5-1edc-478b-b0fc-00384af8b188"  # arbitrary UUID
 
