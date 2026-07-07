@@ -2,7 +2,7 @@
 #  SPDX-License-Identifier: GPL-3.0-or-later
 
 
-from qtpy.QtCore import Signal
+from qtpy.QtCore import Qt, Signal
 from qtpy.QtGui import QFocusEvent, QKeyEvent, QKeySequence, QMouseEvent
 from qtpy.QtWidgets import QLineEdit
 
@@ -15,6 +15,9 @@ class FancyLineEdit(QLineEdit):
 
         if event.matches(QKeySequence.StandardKey.Paste):
             self.pasted.emit()
+
+        if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
+            self.returnPressed.emit()
 
     def focusInEvent(self, event: QFocusEvent) -> None:
         super().focusInEvent(event)

@@ -1,9 +1,15 @@
 # Changelog for Modest Movie Metadata
 
+## 2.0.0 (2026-07-07)
+
+- Initiate search when Return or Enter key is pressed  within the Title or IMDb ID fields.
+- Disable closing of Progress Dialog.
+- Improve readability of message boxes.
+
 ## 2.0.0b2 (2026-06-30)
 
-- Refactor user interface logic by using Qt's state machine.
-- Disable user interface buttons when clicking them would have no effect
+- Refactor user interface logic to use Qt's state machine.
+- Disable user interface buttons when clicking them would have no effect.
 - Significantly speed up searching by title by using SQLite FTS5 virtual table for high-speed text lookups.
 
 ## 2.0.0b1 (2026-06-13)

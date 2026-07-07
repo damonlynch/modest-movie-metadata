@@ -12,16 +12,24 @@ Designed to be as efficient as possible, you use it hands-free:
 1. Monitors the clipboard for IMDb IDs, e.g. within a URL.
 2. Automatically writes generated folder names to the clipboard.
 
-If you prefer, you can enter only the title and optionally a year, and attempt to look up the IMDb ID using this tool.
+If you prefer, you can enter only the title and optionally a year, and attempt to look up the IMDb ID using this tool. If a year is entered, the search will also include titles plus or minus one year. 
 
-The program does not create or monitor folders on the file system.
+Please note however that searching by title does not work with localized titles (see below for an explanation of this limitation).
 
-To function, the program will download a dataset [published by IMDb](https://developer.imdb.com/non-commercial-datasets/) for non-commercial, personal use.  The  dataset will be converted into a database optimized for quick searches. The database contains:
+To function, the program will download a dataset [published by IMDb](https://developer.imdb.com/non-commercial-datasets/) for non-commercial, personal use.  The  dataset will be converted into a database optimized for near instantaneous searches. The database contains:
 1. the title's IMDb ID, e.g. `tt0084988`
 2. the primary title, e.g. `The Black Adder`
 3. the year the title premiered, e.g. `1983`
 
-At the time of writing, the IMDb dataset has over twelve and a half million titles. It is regularly updated by IMDb. If the program does not recognize an IMDb ID, the program itself will prompt to update its database; you can also manually update it.
+The `primary title` is defined by IMDb as "the more popular title / the title used by the filmmakers on promotional materials at the point of release", differentiating it from the original title.
+
+At the time of writing, the IMDb dataset has over twelve and a half million titles. It is updated daily by IMDb. If the program does not recognize an IMDb ID, the program itself will prompt to update its database; you can also manually update it.
+
+The program does not recognize any localized titles because including them would increase the database's size by six or more gigabytes. It is more efficient to look up localized titles on the web.
+
+If the program window is not focused, it will give audio feedback to  indicate a successful or unsuccessful look up. If you find these noises annoying, on Windows 11 you can selectively mute applications using the volume mixer.
+
+The program does not create or monitor folders on the file system.
 
 Tested under Windows 10 and 11. This project is not affiliated with Jellyfin or IMDb. IMDb's data can only be used for [personal and non-commercial use]( https://help.imdb.com/article/imdb/general-information/can-i-use-imdb-data-in-my-software/G5JTRESSHJBBHTGX).
 
