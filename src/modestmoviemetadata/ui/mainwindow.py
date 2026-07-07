@@ -24,7 +24,6 @@ from qtpy.QtWidgets import (
     QLabel,
     QMainWindow,
     QMessageBox,
-    QProgressDialog,
     QVBoxLayout,
     QWidget,
 )
@@ -57,6 +56,7 @@ from modestmoviemetadata.ui.aboutdialog import AboutDialog
 from modestmoviemetadata.ui.appthreading import Worker
 from modestmoviemetadata.ui.fancylineedit import FancyLineEdit
 from modestmoviemetadata.ui.narrowspinbox import NarrowSpinbox
+from modestmoviemetadata.ui.progressdialog import UnclosableProgressDialog
 from modestmoviemetadata.ui.selectrecord import SelectRecord
 from modestmoviemetadata.ui.state import (
     FinalState,
@@ -182,9 +182,11 @@ class MainWindow(QMainWindow):
         self.lastUpdatedTimer.start()
 
         self.titleEdit.textEdited.connect(self.inputFieldEdited)
+        self.titleEdit.returnPressed.connect(self.handleLineEditReturn)
         self.yearSpinbox.valueChanged.connect(self.inputFieldEdited)
         self.imdbEdit.textEdited.connect(self.inputFieldEdited)
         self.imdbEdit.pasted.connect(self.filterImdbEdit)
+        self.imdbEdit.returnPressed.connect(self.handleLineEditReturn)
 
         self.inputFieldEdited.connect(self.evaluateInputFields)
         self.inputFieldEdited.connect(self.evaluateDatasetSearchPossible)
@@ -582,15 +584,14 @@ class MainWindow(QMainWindow):
             self.controller.searchRequested.emit()
 
     @Slot()
+    def handleLineEditReturn(self) -> None:
+        if self.getButton.isEnabled():
+            self.controller.searchRequested.emit()
+
+    @Slot()
     def updateDataset(self) -> None:
         logger.debug("showing progress dialog")
-        self.progressDialog = QProgressDialog(
-            "Checking IMDb dataset...", None, 0, 0, self
-        )
-        self.progressDialog.setMinimumDuration(0)
-        self.progressDialog.setValue(0)
-        self.progressDialog.setWindowModality(Qt.WindowModality.WindowModal)
-        self.progressDialog.setAutoReset(False)
+        self.progressDialog = UnclosableProgressDialog("Checking IMDb dataset...", self)
 
         worker = Worker(download_and_convert, self.settings.value("Last_Modified", ""))
         worker.signals.result.connect(self.updateResult)
@@ -706,13 +707,7 @@ class MainWindow(QMainWindow):
                 self.settings.setValue(key, "do not show")
 
         # The user has agreed to creating the index, either previously or just now
-        self.progressDialog = QProgressDialog(
-            "Optimizing Database...", None, 0, 0, self
-        )
-        self.progressDialog.setMinimumDuration(0)
-        self.progressDialog.setValue(0)
-        self.progressDialog.setWindowModality(Qt.WindowModality.WindowModal)
-        self.progressDialog.setAutoReset(False)
+        self.progressDialog = UnclosableProgressDialog("Optimizing Database...", self)
 
         worker = Worker(create_table_index)
         worker.signals.finished.connect(self.addTitleIndexFinished)
